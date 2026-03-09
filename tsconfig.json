@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",                   // Code moderne pour navigateur
+    "module": "ESNext",                   // Modules ES pour Vite
+    "jsx": "react-jsx",                   // Support TSX moderne
+    "strict": true,                        // Typage strict
+    "moduleResolution": "node",           // Résolution des modules comme Node
+    "esModuleInterop": true,              // Compatibilité imports CommonJS
+    "forceConsistentCasingInFileNames": true, // Evite erreurs de majuscules/minuscules
+    "skipLibCheck": true,                  // Ignore vérif types librairies externes
+    "resolveJsonModule": true,            // Permet importer JSON
+    "isolatedModules": true,              // Requis pour Vite + TSX
+    "baseUrl": "src",                     // Import relatif depuis src
+    "paths": {                             // Alias pour imports
+      "@/*": ["*"]
+    }
+  },
+  "include": ["src"],                     // Inclut tous les fichiers du dossier src
+  "exclude": ["node_modules", "dist"]     // Exclut node_modules et build
+}
