@@ -2,8 +2,8 @@
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App'; // pas d'extension
-import supabaseClient from './lib/supabaseClient'; // initialise le client côté client
-import { registerServiceWorker } from './registerServiceWorker';
+import supabaseClient from './src/pages/supabaseClient'; // initialise le client côté client
+import { registerServiceWorker } from './src/pages/registerServiceWorker';
 
 const container = document.getElementById('root');
 if (!container) {
