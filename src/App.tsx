@@ -1,48 +1,54 @@
-import { Routes, Route } from "react-router-dom"
+// src/App.tsx
+import React, { Suspense, lazy } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
-import Home from "./pages/Home"
-import connexion from "./pages/connexion"
-import admin from "./pages/admin"
-import messages from "./pages/messages"
-import notifications from "./pages/notifications"
-import parametre from "./pages/parametre"
-import publier from "./pages/publier"
-import plus from "./pages/plus"
-import auth from "./pages/auth"
-import offline from "./pages/offline"
-import usereact from "./pages/usereact"
-import editArticle from "./pages/edit-article"
+// Lazy-loaded pages (code-splitting)
+const Home = lazy(() => import('./pages/Home'));
+const Connexion = lazy(() => import('./pages/connexion'));
+const Admin = lazy(() => import('./pages/admin'));
+const Messages = lazy(() => import('./pages/messages'));
+const Notifications = lazy(() => import('./pages/notifications'));
+const Parametre = lazy(() => import('./pages/parametre'));
+const Publier = lazy(() => import('./pages/publier'));
+const Plus = lazy(() => import('./pages/plus'));
+const Auth = lazy(() => import('./pages/auth'));
+const Offline = lazy(() => import('./pages/offline'));
+const UseReact = lazy(() => import('./pages/usereact'));
+const EditArticle = lazy(() => import('./pages/edit-article'));
 
-export default function App() {
+export default function App(): JSX.Element {
   return (
-    <Routes>
+    <Suspense fallback={<div>Chargement de la page…</div>}>
+      <Routes>
+        {/* Page principale */}
+        <Route path="/" element={<Home />} />
 
-      {/* Page principale */}
-      <Route path="/" element={<Home />} />
+        {/* Auth */}
+        <Route path="/connexion" element={<Connexion />} />
+        <Route path="/auth" element={<Auth />} />
 
-      {/* Auth */}
-      <Route path="/connexion" element={<connexion />} />
-      <Route path="/auth" element={<auth />} />
+        {/* Application */}
+        <Route path="/messages" element={<Messages />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/publier" element={<Publier />} />
+        <Route path="/plus" element={<Plus />} />
+        <Route path="/parametre" element={<Parametre />} />
 
-      {/* Application */}
-      <Route path="/messages" element={<messages />} />
-      <Route path="/notifications" element={<notifications />} />
-      <Route path="/publier" element={<publier />} />
-      <Route path="/plus" element={<plus />} />
-      <Route path="/parametre" element={<parametre />} />
+        {/* Admin */}
+        <Route path="/admin" element={<Admin />} />
 
-      {/* Admin */}
-      <Route path="/admin" element={<admin />} />
+        {/* Articles */}
+        <Route path="/edit-article" element={<EditArticle />} />
 
-      {/* Articles */}
-      <Route path="/edit-article" element={<editArticle />} />
+        {/* React test */}
+        <Route path="/usereact" element={<UseReact />} />
 
-      {/* React test */}
-      <Route path="/usereact" element={<usereact />} />
+        {/* Offline */}
+        <Route path="/offline" element={<Offline />} />
 
-      {/* Offline */}
-      <Route path="/offline" element={<offline />} />
-
-    </Routes>
-  )
+        {/* Catch-all -> redirige vers la home (ou remplacer par une page 404 si tu veux) */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
+  );
 }
