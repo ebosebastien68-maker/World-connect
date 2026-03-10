@@ -1,8 +1,3 @@
 {
-  "rewrites": [
-    {
-      "source": "/((?!service-worker\\.js|service-worker\\.ts|assets/|favicon\\.ico).*)",
-      "destination": "/index.html"
-    }
-  ]
+  "framework": "nextjs"
 }
