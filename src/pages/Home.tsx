@@ -660,7 +660,7 @@ const HomePage: React.FC = () => {
   const initServiceWorker = useCallback(async () => {
     if (!('serviceWorker' in navigator)) return;
     try {
-      const reg = await navigator.serviceWorker.register('./service-worker.ts');
+      const reg = await navigator.serviceWorker.register('./service-worker.js');
       swRegistrationRef.current = reg;
       navigator.serviceWorker.addEventListener('message', (event) => {
         const { type } = event.data || {};
