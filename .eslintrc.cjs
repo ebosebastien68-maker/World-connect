@@ -5,26 +5,26 @@ module.exports = {
     es2021: true,
     node: true,
   },
-  parser: '@typescript-eslint/parser',          // Parser TypeScript
+  parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2021,
     sourceType: 'module',
-    ecmaFeatures: { jsx: true },               // Support JSX/TSX
+    ecmaFeatures: { jsx: true },
   },
   settings: {
-    react: { version: 'detect' },              // Détecte la version de React automatiquement
+    react: { version: 'detect' },
   },
   extends: [
-    'eslint:recommended',                      // Recommandations JS
-    'plugin:react/recommended',                // Recommandations React
-    'plugin:@typescript-eslint/recommended',   // Recommandations TS
-    'plugin:react-hooks/recommended'           // Bonnes pratiques Hooks
+    'eslint:recommended',
+    'plugin:react/recommended',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:react-hooks/recommended'
   ],
   plugins: ['react', '@typescript-eslint', 'react-hooks'],
   rules: {
-    'react/react-in-jsx-scope': 'off',         // React 18 n’a plus besoin d’import React
-    '@typescript-eslint/explicit-module-boundary-types': 'off', // Optionnel pour TSX
-    'react/prop-types': 'off',                 // On utilise TS pour typage des props
-    'no-console': 'warn',                       // Warning console.log
+    'react/react-in-jsx-scope': 'off',
+    '@typescript-eslint/explicit-module-boundary-types': 'off',
+    'react/prop-types': 'off',
+    'no-console': 'warn'
   },
 };
