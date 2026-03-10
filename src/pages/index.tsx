@@ -1,4 +1,6 @@
-// src/pages/Home.tsx
+'use client';
+
+// src/pages/index.tsx
 import React, {
   useState,
   useEffect,
@@ -6,8 +8,8 @@ import React, {
   useCallback,
 } from 'react';
 import * as THREE from 'three';
-import { useNavigate } from 'react-router-dom';
-import supabase from './supabaseClient';
+import { useRouter } from 'next/navigation';
+import supabase from '@/lib/supabaseClient';
 import './style.css';
 
 // ============================================================================
@@ -142,18 +144,14 @@ const ArticleCard: React.FC<{
   const userArticleReactions = userReactions[article.article_id] || [];
   const commentCount = article.comment_count || 0;
 
-  const getShareUrl = () =>
-    `${window.location.origin}/?article=${article.article_id}`;
+  const getShareUrl = () => `${window.location.origin}/?article=${article.article_id}`;
 
   const handleShareClick = (platform: string) => {
     setShowShareMenu(false);
     if (platform === 'more') {
       if (navigator.share) {
-        navigator.share({
-          title: 'World Connect',
-          text: textContent.substring(0, 100) + '...',
-          url: getShareUrl(),
-        }).catch(() => navigator.clipboard.writeText(getShareUrl()));
+        navigator.share({ title: 'World Connect', text: textContent.substring(0, 100) + '...', url: getShareUrl() })
+          .catch(() => navigator.clipboard.writeText(getShareUrl()));
       } else {
         navigator.clipboard.writeText(getShareUrl());
       }
@@ -306,13 +304,13 @@ const ArticleCard: React.FC<{
 // ============================================================================
 
 const HomePage: React.FC = () => {
-  const navigate = useNavigate();
+  // ✅ Next.js : useRouter remplace useNavigate
+  const router = useRouter();
 
   const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [allArticles, setAllArticles] = useState<Article[]>([]);
   const [displayedArticles, setDisplayedArticles] = useState<Article[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageName>('home');
   const [userReactions, setUserReactions] = useState<Record<string, string[]>>({});
 
@@ -328,11 +326,10 @@ const HomePage: React.FC = () => {
   const [articlesLoading, setArticlesLoading] = useState(true);
   const [emptyState, setEmptyState] = useState(false);
   const [emptyStateContent, setEmptyStateContent] = useState<'default' | 'offline' | 'error'>('default');
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isOnline, setIsOnline] = useState(true);
 
   const [notifCount, setNotifCount] = useState(0);
   const [messageCount, setMessageCount] = useState(0);
-
   const [welcomeVisible, setWelcomeVisible] = useState(false);
   const [loadedPages, setLoadedPages] = useState<Set<PageName>>(new Set(['home']));
   const [iframeUrls, setIframeUrls] = useState<Partial<Record<PageName, string>>>({});
@@ -368,6 +365,8 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     const saved = localStorage.getItem('theme') || 'light';
     if (saved === 'dark') { setIsDarkMode(true); document.body.classList.add('dark-mode'); }
+    // ✅ isOnline initialisé côté client uniquement (navigator n'existe pas côté serveur)
+    setIsOnline(navigator.onLine);
   }, []);
 
   const toggleTheme = () => {
@@ -475,9 +474,8 @@ const HomePage: React.FC = () => {
     return new Uint8Array([...rawData].map((c) => c.charCodeAt(0)));
   };
 
-  const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-    return window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
-  };
+  const arrayBufferToBase64 = (buffer: ArrayBuffer): string =>
+    window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
 
   const saveSubscriptionToDatabase = useCallback(async (subscription: PushSubscription, user: SupabaseUser) => {
     try {
@@ -491,7 +489,7 @@ const HomePage: React.FC = () => {
         created_at: new Date().toISOString(),
       }, { onConflict: 'user_id,endpoint' });
     } catch (err) {
-      console.error('❌ Erreur sauvegarde subscription:', err);
+      console.error('❌ Erreur subscription:', err);
     }
   }, []);
 
@@ -505,7 +503,7 @@ const HomePage: React.FC = () => {
       });
       await saveSubscriptionToDatabase(sub, user);
     } catch (err) {
-      console.error('❌ Erreur abonnement push:', err);
+      console.error('❌ Erreur push:', err);
       showToast('Erreur', "Impossible de s'abonner aux notifications", 'error');
     }
   }, [saveSubscriptionToDatabase, showToast]);
@@ -528,7 +526,7 @@ const HomePage: React.FC = () => {
       await subscribeToPush(user);
       showToast('✅ Notifications activées', 'Vous recevrez nos actualités en temps réel !', 'success', 6000);
     } else if (permission === 'denied') {
-      showToast('🔕 Notifications désactivées', 'Vous pouvez les réactiver dans les paramètres', 'warning', 6000);
+      showToast('🔕 Notifications désactivées', 'Réactivez-les dans les paramètres', 'warning', 6000);
     }
   }, [subscribeToPush, showToast]);
 
@@ -584,14 +582,14 @@ const HomePage: React.FC = () => {
     try {
       const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('read_status', false);
       setNotifCount(count ?? 0);
-    } catch {}
+    } catch { /* silencieux */ }
   }, []);
 
   const loadMessageCount = useCallback(async (user: SupabaseUser) => {
     try {
       const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('receiver_id', user.id).eq('read_status', false);
       setMessageCount(count ?? 0);
-    } catch {}
+    } catch { /* silencieux */ }
   }, []);
 
   // ── Temps réel ─────────────────────────────────────────────────────────────
@@ -608,7 +606,8 @@ const HomePage: React.FC = () => {
   const handleReaction = useCallback(async (articleId: string, reactionType: string) => {
     if (!currentUser || !userProfile) {
       showToast('Connexion requise', 'Connectez-vous pour réagir', 'warning');
-      setTimeout(() => navigate('/connexion'), 2000);
+      // ✅ Next.js : router.push remplace navigate
+      setTimeout(() => router.push('/connexion'), 2000);
       return;
     }
     if (!navigator.onLine) { showToast('Hors ligne', 'Impossible de réagir hors ligne', 'error'); return; }
@@ -627,7 +626,7 @@ const HomePage: React.FC = () => {
     } catch {
       showToast('Erreur', "Impossible d'enregistrer votre réaction", 'error');
     }
-  }, [currentUser, userProfile, loadArticles, showToast, navigate]);
+  }, [currentUser, userProfile, loadArticles, showToast, router]);
 
   const deleteArticle = useCallback(async (articleId: string) => {
     if (!window.confirm('Voulez-vous vraiment supprimer cet article ?')) return;
@@ -647,11 +646,11 @@ const HomePage: React.FC = () => {
   const viewUserReactions = useCallback((articleId: string) => {
     if (!currentUser || !userProfile) {
       showToast('Connexion requise', 'Connectez-vous pour voir les réactions', 'warning');
-      setTimeout(() => navigate('/connexion'), 2000);
+      setTimeout(() => router.push('/connexion'), 2000);
       return;
     }
-    navigate(`/usereact?article_id=${articleId}`);
-  }, [currentUser, userProfile, showToast, navigate]);
+    router.push(`/usereact?article_id=${articleId}`);
+  }, [currentUser, userProfile, showToast, router]);
 
   const handleShare = useCallback((platform: string, articleId: string) => {
     const article = allArticles.find((a) => a.article_id === articleId);
@@ -675,8 +674,7 @@ const HomePage: React.FC = () => {
 
   const performSearch = useCallback(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) { setDisplayedArticles(allArticles); setShowSearchInfo(false); setIsSearching(false); return; }
-    setIsSearching(true);
+    if (!query) { setDisplayedArticles(allArticles); setShowSearchInfo(false); return; }
     const filtered = allArticles.filter((a) => {
       const text = a.texte.toLowerCase();
       const author = `${a.users_profile.prenom} ${a.users_profile.nom}`.toLowerCase();
@@ -689,7 +687,7 @@ const HomePage: React.FC = () => {
     setTimeout(() => setSearchPanelOpen(false), 500);
   }, [searchQuery, allArticles, showToast]);
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
+  // ── Navigation interne (SPA pages) ────────────────────────────────────────
 
   const navigateToPage = useCallback((page: PageName) => {
     if (page === currentPage) return;
@@ -708,12 +706,13 @@ const HomePage: React.FC = () => {
       sessionStorage.removeItem('welcomeShown');
       await supabase.auth.signOut();
       showToast('Déconnexion', 'À bientôt !', 'success');
-      setTimeout(() => navigate('/connexion'), 1000);
+      // ✅ Next.js : router.push remplace navigate
+      setTimeout(() => router.push('/connexion'), 1000);
     } catch {
       setLoading(false);
       showToast('Erreur', 'Impossible de se déconnecter', 'error');
     }
-  }, [showToast, navigate]);
+  }, [showToast, router]);
 
   // ── Menu ───────────────────────────────────────────────────────────────────
 
@@ -741,7 +740,6 @@ const HomePage: React.FC = () => {
 
   useEffect(() => {
     const init = async () => {
-      console.log('🚀 Initialisation World Connect...');
       await initServiceWorker();
 
       const manualLogout = sessionStorage.getItem('manualLogout');
@@ -757,7 +755,6 @@ const HomePage: React.FC = () => {
 
         if (user) {
           setCurrentUser(user);
-
           const { data: profile } = await supabase.from('users_profile').select('prenom, nom, role').eq('user_id', user.id).single();
 
           if (profile) {
@@ -794,7 +791,6 @@ const HomePage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Badges interval + visibilité
   useEffect(() => {
     if (!currentUser) return;
     const interval = setInterval(() => {
@@ -872,7 +868,7 @@ const HomePage: React.FC = () => {
           <div className="menu-divider"></div>
 
           {!currentUser ? (
-            <div className="menu-item" onClick={() => navigate('/connexion')}>
+            <div className="menu-item" onClick={() => router.push('/connexion')}>
               <i className="fas fa-sign-in-alt"></i><span>Connexion</span>
             </div>
           ) : (
@@ -883,12 +879,12 @@ const HomePage: React.FC = () => {
           )}
 
           {userProfile?.role === 'admin' && (
-            <div className="menu-item" onClick={() => navigate('/publier')}>
+            <div className="menu-item" onClick={() => router.push('/publier')}>
               <i className="fas fa-edit"></i><span>Administration</span>
             </div>
           )}
 
-          <div className="menu-item" onClick={() => navigate('/parametre')}>
+          <div className="menu-item" onClick={() => router.push('/parametre')}>
             <i className="fas fa-cog"></i><span>Paramètres</span>
           </div>
 
@@ -919,7 +915,8 @@ const HomePage: React.FC = () => {
         <h3><i className="fas fa-search"></i> Rechercher des articles</h3>
         <div className="search-input-container">
           <input type="text" className="search-input" placeholder="Mots-clés..." value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && performSearch()} />
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && performSearch()} />
           <button className="search-btn" onClick={performSearch}><i className="fas fa-search"></i> Rechercher</button>
         </div>
         {showSearchInfo && <div className="search-results-info">Résultats : <span>{searchResultCount}</span> article(s)</div>}
@@ -959,7 +956,7 @@ const HomePage: React.FC = () => {
                   onDelete={deleteArticle}
                   onViewReactions={viewUserReactions}
                   onShare={handleShare}
-                  onNavigate={navigate}
+                  onNavigate={(path) => router.push(path)}
                   allArticles={allArticles}
                 />
               ))}
