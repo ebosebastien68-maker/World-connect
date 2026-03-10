@@ -1,10 +1,13 @@
-// ============================================================================
-// WORLD CONNECT - PUBLIER.TSX
-// Converti depuis publier.html — Administration
-// Publication d'articles + envoi de notifications
-// ============================================================================
+// pages/publier.tsx
+// ✅ Pages Router — pas de 'use client'
+// ✅ useRouter de 'next/router'
+// ✅ supabase importé depuis @/lib/supabaseClient
+// ✅ window.location.href → router.push()
+// ✅ window.supabaseClient supprimé
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/router';
+import supabase from '@/lib/supabaseClient';
 
 // ============================================================================
 // CSS INLINE
@@ -38,7 +41,6 @@ body {
   line-height: 1.6;
 }
 
-/* ── Navbar ──────────────────────────────────────────────── */
 .navbar {
   position: fixed; top: 0; left: 0; right: 0;
   background: rgba(255,255,255,0.95);
@@ -90,7 +92,6 @@ body {
 }
 .logout-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102,126,234,0.4); }
 
-/* ── Container ───────────────────────────────────────────── */
 .container { max-width: 1200px; margin: 100px auto 40px; padding: 0 20px; }
 
 .page-header { text-align: center; margin-bottom: 40px; animation: fadeInDown 0.6s ease; }
@@ -101,7 +102,6 @@ body {
 }
 .page-header p { font-size: 18px; color: #666; }
 
-/* ── Stats ───────────────────────────────────────────────── */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap: 20px; margin-bottom: 30px; }
 
 .stat-card {
@@ -119,7 +119,6 @@ body {
 .stat-content h3 { font-size: 32px; font-weight: 800; color: var(--dark); margin-bottom: 4px; }
 .stat-content p { font-size: 14px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 
-/* ── Tabs ────────────────────────────────────────────────── */
 .tabs-container {
   display: flex; gap: 12px; margin-bottom: 30px;
   background: white; padding: 8px; border-radius: var(--radius); box-shadow: var(--shadow);
@@ -145,7 +144,6 @@ body {
 .tab-content { display: none; animation: fadeIn 0.4s ease; }
 .tab-content.active { display: block; }
 
-/* ── Card ────────────────────────────────────────────────── */
 .card {
   background: white; border-radius: var(--radius); padding: 40px;
   box-shadow: var(--shadow); margin-bottom: 20px; transition: var(--transition);
@@ -163,7 +161,6 @@ body {
 }
 .card-header h2 { font-size: 24px; font-weight: 700; color: var(--dark); }
 
-/* ── Form ────────────────────────────────────────────────── */
 .form-group { margin-bottom: 28px; }
 
 label {
@@ -186,7 +183,6 @@ textarea:focus, input:focus, select:focus {
   box-shadow: 0 0 0 4px rgba(102,126,234,0.1);
 }
 
-/* ── Upload ──────────────────────────────────────────────── */
 .upload-section { margin-bottom: 28px; }
 .upload-tabs { display: flex; gap: 12px; margin-bottom: 20px; }
 
@@ -229,7 +225,6 @@ textarea:focus, input:focus, select:focus {
 .upload-text p { color: #666; font-size: 14px; }
 .upload-limit { margin-top: 12px; font-size: 12px; color: #999; font-weight: 500; }
 
-/* ── Preview ─────────────────────────────────────────────── */
 .preview-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 16px; margin-top: 20px; }
 
 .preview-item {
@@ -271,7 +266,6 @@ textarea:focus, input:focus, select:focus {
   font-size: 24px; color: var(--primary); box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
-/* ── URL grid ────────────────────────────────────────────── */
 .url-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 20px; margin-bottom: 28px; }
 
 .url-card {
@@ -282,7 +276,6 @@ textarea:focus, input:focus, select:focus {
 .url-card label { margin-bottom: 12px; }
 .url-card input { background: white; }
 
-/* ── Buttons ─────────────────────────────────────────────── */
 .btn-group { display: flex; gap: 12px; margin-top: 30px; }
 
 .submit-btn {
@@ -307,7 +300,6 @@ textarea:focus, input:focus, select:focus {
 }
 .btn-secondary:hover { background: var(--primary); color: white; transform: translateY(-3px); box-shadow: 0 10px 30px rgba(102,126,234,0.3); }
 
-/* ── Message banner ──────────────────────────────────────── */
 .message {
   padding: 20px 24px; border-radius: var(--radius-sm); margin-bottom: 24px;
   display: none; align-items: center; gap: 12px; font-weight: 600;
@@ -319,7 +311,6 @@ textarea:focus, input:focus, select:focus {
 .message.error   { background: linear-gradient(135deg,rgba(239,71,111,0.1),rgba(239,71,111,0.05)); color: #dc2626; border-left: 4px solid var(--danger); }
 .message.info    { background: linear-gradient(135deg,rgba(102,126,234,0.1),rgba(102,126,234,0.05)); color: var(--primary); border-left: 4px solid var(--primary); }
 
-/* ── Loader ──────────────────────────────────────────────── */
 .loader {
   display: none; position: fixed; inset: 0;
   background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
@@ -339,18 +330,15 @@ textarea:focus, input:focus, select:focus {
 
 .loader-text { margin-top: 24px; font-size: 18px; font-weight: 600; color: var(--dark); }
 
-/* ── Animations ──────────────────────────────────────────── */
 @keyframes fadeIn       { from { opacity: 0; }                                 to { opacity: 1; } }
 @keyframes fadeInUp     { from { opacity: 0; transform: translateY(30px); }   to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeInDown   { from { opacity: 0; transform: translateY(-30px); }  to { opacity: 1; transform: translateY(0); } }
 @keyframes slideInDown  { from { opacity: 0; transform: translateY(-20px); }  to { opacity: 1; transform: translateY(0); } }
 
-/* ── Scrollbar ───────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--light); }
 ::-webkit-scrollbar-thumb { background: linear-gradient(135deg,var(--primary) 0%,var(--secondary) 100%); border-radius: 10px; }
 
-/* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 768px) {
   .navbar { padding: 12px 20px; }
   .navbar-brand { font-size: 20px; }
@@ -380,16 +368,6 @@ type MsgType    = 'success' | 'error' | 'info';
 interface PreviewItem { file: File; dataUrl: string; }
 interface Banner      { text: string; type: MsgType; }
 
-declare global {
-  interface Window {
-    supabaseClient: {
-      supabase: any;
-      getCurrentUser:  () => Promise<SupabaseUser | null>;
-      getUserProfile:  (id: string) => Promise<{ role: string } | null>;
-    };
-  }
-}
-
 // ============================================================================
 // HELPER
 // ============================================================================
@@ -401,11 +379,12 @@ function formatFileSize(bytes: number): string {
 }
 
 // ============================================================================
-// PUBLIER PAGE COMPONENT
+// COMPOSANT PRINCIPAL
 // ============================================================================
 const PublierPage: React.FC = () => {
+  const router = useRouter();
 
-  // ── CSS + title ──────────────────────────────────────────────────────────
+  // ── CSS ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     const s = document.createElement('style');
     s.id = 'publier-styles';
@@ -415,104 +394,50 @@ const PublierPage: React.FC = () => {
     return () => { document.getElementById('publier-styles')?.remove(); };
   }, []);
 
-  // ── State ────────────────────────────────────────────────────────────────
-  const [activeTab,     setActiveTab]     = useState<TabType>('article');
-  const [uploadTab,     setUploadTab]     = useState<UploadTab>('images');
-  const [dragOver,      setDragOver]      = useState(false);
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [activeTab,   setActiveTab]   = useState<TabType>('article');
+  const [uploadTab,   setUploadTab]   = useState<UploadTab>('images');
+  const [dragOver,    setDragOver]    = useState(false);
+  const [texte,       setTexte]       = useState('');
+  const [texteUrl,    setTexteUrl]    = useState('');
+  const [venteUrl,    setVenteUrl]    = useState('');
+  const [whatsappUrl, setWhatsappUrl] = useState('');
+  const [selImages,   setSelImages]   = useState<PreviewItem[]>([]);
+  const [selVideo,    setSelVideo]    = useState<PreviewItem | null>(null);
+  const [notifUser,   setNotifUser]   = useState('all');
+  const [notifTexte,  setNotifTexte]  = useState('');
+  const [users,       setUsers]       = useState<UserOption[]>([]);
+  const [banner,      setBanner]      = useState<Banner | null>(null);
+  const [loading,     setLoading]     = useState(false);
+  const [statNotifs,  setStatNotifs]  = useState(0);
+  const [refreshAnim, setRefreshAnim] = useState(false);
 
-  // Article form
-  const [texte,         setTexte]         = useState('');
-  const [texteUrl,      setTexteUrl]      = useState('');
-  const [venteUrl,      setVenteUrl]      = useState('');
-  const [whatsappUrl,   setWhatsappUrl]   = useState('');
-  const [selImages,     setSelImages]     = useState<PreviewItem[]>([]);
-  const [selVideo,      setSelVideo]      = useState<PreviewItem | null>(null);
+  const currentUserRef  = useRef<SupabaseUser | null>(null);
+  const autoSaveRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bannerTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Notification form
-  const [notifUser,     setNotifUser]     = useState('all');
-  const [notifTexte,    setNotifTexte]    = useState('');
-  const [users,         setUsers]         = useState<UserOption[]>([]);
+  // ── Banner ────────────────────────────────────────────────────────────────
+  const showBanner = useCallback((text: string, type: MsgType) => {
+    setBanner({ text, type });
+    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    bannerTimerRef.current = setTimeout(() => setBanner(null), 5000);
+  }, []);
 
-  // UI
-  const [banner,        setBanner]        = useState<Banner | null>(null);
-  const [loading,       setLoading]       = useState(false);
-  const [statNotifs,    setStatNotifs]    = useState(0);
-  const [refreshAnim,   setRefreshAnim]   = useState(false);
-
-  const sbRef          = useRef<any>(null);
-  const currentUserRef = useRef<SupabaseUser | null>(null);
-  const autoSaveRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── Supabase init ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const tryInit = () => {
-      if (window.supabaseClient?.supabase) {
-        sbRef.current = window.supabaseClient.supabase;
-        initApp();
-      } else {
-        setTimeout(tryInit, 100);
-      }
-    };
-    tryInit();
-
-    // Ctrl+S shortcut
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        if (texte) {
-          localStorage.setItem('article_draft', JSON.stringify({ texte, timestamp: new Date().toISOString() }));
-          showBanner('Brouillon sauvegardé', 'info');
-        }
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [texte]);
-
-  // ── Auto-save draft ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!texte) return;
-    if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
-    autoSaveRef.current = setTimeout(() => {
-      localStorage.setItem('article_draft', JSON.stringify({ texte, timestamp: new Date().toISOString() }));
-    }, 2000);
-  }, [texte]);
-
-  // ── Init ─────────────────────────────────────────────────────────────────
-  const initApp = async () => {
-    const user = await window.supabaseClient.getCurrentUser();
-    if (!user) { window.location.href = 'connexion.tsx'; return; }
-
-    const profile = await window.supabaseClient.getUserProfile(user.id);
-    if (!profile || profile.role !== 'admin') {
-      showBanner('Accès refusé. Réservé aux administrateurs.', 'error');
-      setTimeout(() => { window.location.href = 'home.tsx'; }, 2000);
-      return;
-    }
-
-    currentUserRef.current = user;
-    await Promise.all([loadUsers(), loadStats()]);
-    restoreDraft();
-  };
-
-  // ── Data loaders ─────────────────────────────────────────────────────────
-  const loadUsers = async () => {
+  // ── Loaders ───────────────────────────────────────────────────────────────
+  const loadUsers = useCallback(async () => {
     try {
-      const { data, error } = await sbRef.current
-        .from('users_profile').select('user_id,prenom,nom').order('prenom');
+      const { data, error } = await supabase.from('users_profile').select('user_id,prenom,nom').order('prenom');
       if (error) throw error;
       setUsers(data || []);
     } catch (err) { console.error('loadUsers:', err); }
-  };
+  }, []);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
-      const res = await sbRef.current
-        .from('notifications').select('notification_id', { count: 'exact', head: true });
-      setStatNotifs(res.count || 0);
+      const { count } = await supabase.from('notifications').select('notification_id', { count: 'exact', head: true });
+      setStatNotifs(count || 0);
     } catch (err) { console.error('loadStats:', err); }
-  };
+  }, []);
 
   const refreshStats = async () => {
     setRefreshAnim(true);
@@ -533,18 +458,60 @@ const PublierPage: React.FC = () => {
     } catch { /* ignore */ }
   };
 
-  // ── Banner ────────────────────────────────────────────────────────────────
-  const showBanner = useCallback((text: string, type: MsgType) => {
-    setBanner({ text, type });
-    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-    bannerTimerRef.current = setTimeout(() => setBanner(null), 5000);
+  // ── Init ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const initApp = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        // ✅ router.push remplace window.location.href
+        if (!user) { router.push('/connexion'); return; }
+
+        const { data: profile } = await supabase.from('users_profile').select('role').eq('user_id', user.id).single();
+        if (!profile || (profile as { role: string }).role !== 'admin') {
+          showBanner('Accès refusé. Réservé aux administrateurs.', 'error');
+          setTimeout(() => router.push('/'), 2000);
+          return;
+        }
+
+        currentUserRef.current = { id: user.id, email: user.email || '' };
+        await Promise.all([loadUsers(), loadStats()]);
+        restoreDraft();
+      } catch (err) {
+        console.error('initApp:', err);
+        router.push('/connexion');
+      }
+    };
+    initApp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Image handling ────────────────────────────────────────────────────────
+  // ── Ctrl+S shortcut ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (texte) {
+          localStorage.setItem('article_draft', JSON.stringify({ texte, timestamp: new Date().toISOString() }));
+          showBanner('Brouillon sauvegardé', 'info');
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [texte, showBanner]);
+
+  // ── Auto-save ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!texte) return;
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
+    autoSaveRef.current = setTimeout(() => {
+      localStorage.setItem('article_draft', JSON.stringify({ texte, timestamp: new Date().toISOString() }));
+    }, 2000);
+  }, [texte]);
+
+  // ── Images ────────────────────────────────────────────────────────────────
   const processImageFiles = (files: File[]) => {
-    if (selImages.length + files.length > 5) {
-      showBanner('Maximum 5 images autorisées', 'error'); return;
-    }
+    if (selImages.length + files.length > 5) { showBanner('Maximum 5 images autorisées', 'error'); return; }
     const valid: File[] = [];
     for (const f of files) {
       if (!f.type.startsWith('image/')) { showBanner(`${f.name} n'est pas une image valide`, 'error'); continue; }
@@ -558,24 +525,16 @@ const PublierPage: React.FC = () => {
     });
   };
 
-  const handleImagesInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    processImageFiles(Array.from(e.target.files || []));
-  };
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    processImageFiles(files);
+    processImageFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
   };
 
-  const removeImage = (idx: number) => setSelImages(prev => prev.filter((_, i) => i !== idx));
-
-  // ── Video handling ────────────────────────────────────────────────────────
   const handleVideoInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (!f.type.startsWith('video/'))    { showBanner('Le fichier doit être une vidéo', 'error'); return; }
-    if (f.size > 50 * 1024 * 1024)      { showBanner('La vidéo ne doit pas dépasser 50MB', 'error'); return; }
+    if (!f.type.startsWith('video/'))  { showBanner('Le fichier doit être une vidéo', 'error'); return; }
+    if (f.size > 50 * 1024 * 1024)    { showBanner('La vidéo ne doit pas dépasser 50MB', 'error'); return; }
     const reader = new FileReader();
     reader.onload = ev => setSelVideo({ file: f, dataUrl: ev.target!.result as string });
     reader.readAsDataURL(f);
@@ -587,53 +546,41 @@ const PublierPage: React.FC = () => {
     const user = currentUserRef.current;
     if (!user) return;
     setLoading(true);
-
     try {
-      const { data: article, error: artErr } = await sbRef.current
+      const { data: article, error: artErr } = await supabase
         .from('articles')
-        .insert({
-          user_id: user.id,
-          texte: texte.trim(),
-          texte_url:    texteUrl.trim()    || null,
-          vente_url:    venteUrl.trim()    || null,
-          whatsapp_url: whatsappUrl.trim() || null,
-        })
+        .insert({ user_id: user.id, texte: texte.trim(), texte_url: texteUrl.trim() || null, vente_url: venteUrl.trim() || null, whatsapp_url: whatsappUrl.trim() || null })
         .select().single();
-
       if (artErr) throw artErr;
 
       // Upload images
       for (const img of selImages) {
         const fileName = `${Date.now()}_${Math.random().toString(36).substr(2,9)}_${img.file.name}`;
-        const { error: upErr } = await sbRef.current.storage
-          .from('articles-images').upload(fileName, img.file, { cacheControl: '3600', upsert: false });
+        const { error: upErr } = await supabase.storage.from('articles-images').upload(fileName, img.file, { cacheControl: '3600', upsert: false });
         if (upErr) throw upErr;
-        const { data: { publicUrl } } = sbRef.current.storage.from('articles-images').getPublicUrl(fileName);
-        await sbRef.current.from('article_images').insert({ article_id: article.article_id, image_url: publicUrl });
+        const { data: { publicUrl } } = supabase.storage.from('articles-images').getPublicUrl(fileName);
+        await supabase.from('article_images').insert({ article_id: (article as { article_id: string }).article_id, image_url: publicUrl });
       }
 
       // Upload video
       if (selVideo) {
         const fileName = `${Date.now()}_${Math.random().toString(36).substr(2,9)}_${selVideo.file.name}`;
-        const { error: upErr } = await sbRef.current.storage
-          .from('videos').upload(fileName, selVideo.file, { cacheControl: '3600', upsert: false });
+        const { error: upErr } = await supabase.storage.from('videos').upload(fileName, selVideo.file, { cacheControl: '3600', upsert: false });
         if (upErr) throw upErr;
-        const { data: { publicUrl } } = sbRef.current.storage.from('videos').getPublicUrl(fileName);
-        await sbRef.current.from('article_videos').insert({ article_id: article.article_id, video_url: publicUrl });
+        const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
+        await supabase.from('article_videos').insert({ article_id: (article as { article_id: string }).article_id, video_url: publicUrl });
       }
 
       showBanner('🎉 Article publié avec succès !', 'success');
       resetArticleForm();
       localStorage.removeItem('article_draft');
       await loadStats();
-      setTimeout(() => { window.location.href = 'home.tsx'; }, 2000);
-
-    } catch (err: any) {
+      // ✅ router.push remplace window.location.href
+      setTimeout(() => router.push('/'), 2000);
+    } catch (err: unknown) {
       console.error('handleArticleSubmit:', err);
-      showBanner('❌ Erreur lors de la publication : ' + (err.message || ''), 'error');
-    } finally {
-      setLoading(false);
-    }
+      showBanner('❌ Erreur : ' + (err instanceof Error ? err.message : ''), 'error');
+    } finally { setLoading(false); }
   };
 
   // ── Notification submit ───────────────────────────────────────────────────
@@ -642,89 +589,70 @@ const PublierPage: React.FC = () => {
     setLoading(true);
     try {
       const texteNotif = notifTexte.trim();
-
       if (notifUser === 'all') {
-        const { data: allUsers, error: usrErr } = await sbRef.current
-          .from('users_profile').select('user_id');
+        const { data: allUsers, error: usrErr } = await supabase.from('users_profile').select('user_id');
         if (usrErr) throw usrErr;
-
-        const { error: nErr } = await sbRef.current
-          .from('notifications')
-          .insert((allUsers || []).map((u: { user_id: string }) => ({ user_id: u.user_id, texte: texteNotif })));
+        const { error: nErr } = await supabase.from('notifications').insert(
+          (allUsers || []).map((u: { user_id: string }) => ({ user_id: u.user_id, texte: texteNotif }))
+        );
         if (nErr) throw nErr;
-
         showBanner(`🔔 Notification envoyée à ${allUsers?.length || 0} utilisateur(s) !`, 'success');
       } else {
-        const { error: nErr } = await sbRef.current
-          .from('notifications').insert({ user_id: notifUser, texte: texteNotif });
+        const { error: nErr } = await supabase.from('notifications').insert({ user_id: notifUser, texte: texteNotif });
         if (nErr) throw nErr;
         showBanner('🔔 Notification envoyée avec succès !', 'success');
       }
-
       setNotifTexte(''); setNotifUser('all');
       await loadStats();
-
-    } catch (err: any) {
-      console.error('handleNotifSubmit:', err);
-      showBanner("❌ Erreur lors de l'envoi : " + (err.message || ''), 'error');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: unknown) {
+      showBanner("❌ Erreur : " + (err instanceof Error ? err.message : ''), 'error');
+    } finally { setLoading(false); }
   };
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
   const resetArticleForm = () => {
     setTexte(''); setTexteUrl(''); setVenteUrl(''); setWhatsappUrl('');
     setSelImages([]); setSelVideo(null);
   };
 
-  // ── Logout ────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     if (!confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) return;
     try {
-      await sbRef.current.auth.signOut();
-      window.location.href = 'connexion.tsx';
-    } catch (err) {
-      showBanner('Erreur lors de la déconnexion', 'error');
-    }
+      await supabase.auth.signOut();
+      // ✅ router.push remplace window.location.href
+      router.push('/connexion');
+    } catch { showBanner('Erreur lors de la déconnexion', 'error'); }
   };
 
-  // ── Banner icons ──────────────────────────────────────────────────────────
   const bannerIcon = banner?.type === 'success' ? 'fas fa-check-circle'
                    : banner?.type === 'error'   ? 'fas fa-exclamation-circle'
                    : 'fas fa-info-circle';
 
-  // ── JSX ───────────────────────────────────────────────────────────────────
+  // ============================================================================
+  // RENDER
+  // ============================================================================
   return (
     <>
-      {/* Loader */}
       <div className={`loader${loading ? ' show' : ''}`}>
         <div className="spinner-container">
-          <div className="spinner" />
-          <div className="spinner" />
+          <div className="spinner" /><div className="spinner" />
         </div>
         <p className="loader-text">Traitement en cours…</p>
       </div>
 
-      {/* Navbar */}
       <nav className="navbar">
         <div className="navbar-brand">
-          <i className="fas fa-crown" />
-          <span>Administration</span>
+          <i className="fas fa-crown" /><span>Administration</span>
         </div>
         <div className="navbar-right">
-          <button className="icon-btn" title="Accueil"   onClick={() => { window.location.href = 'home.tsx'; }}>
-            <i className="fas fa-home" />
-          </button>
-          <button className="icon-btn" title="Messages"  onClick={() => { window.location.href = 'messages.tsx'; }}>
-            <i className="fas fa-envelope" />
-          </button>
+          {/* ✅ router.push remplace window.location.href */}
+          <button className="icon-btn" title="Accueil"    onClick={() => router.push('/')}><i className="fas fa-home" /></button>
+          <button className="icon-btn" title="Messages"   onClick={() => router.push('/messages')}><i className="fas fa-envelope" /></button>
           <button className="icon-btn" title="Actualiser"
             style={refreshAnim ? { animation: 'spin 1s linear' } : {}}
             onClick={refreshStats}>
             <i className="fas fa-sync-alt" />
           </button>
-          <button className="admin-btn" onClick={() => { window.location.href = 'usereact.tsx'; }}>
+          <button className="admin-btn" onClick={() => router.push('/usereact')}>
             <i className="fas fa-cog" /><span>Admin</span>
           </button>
           <button className="logout-btn" onClick={handleLogout}>
@@ -733,14 +661,12 @@ const PublierPage: React.FC = () => {
         </div>
       </nav>
 
-      {/* Content */}
       <div className="container">
         <div className="page-header">
-          <h1><i className="fas fa-sparkles" /> Panneau d'Administration</h1>
+          <h1>✨ Panneau d'Administration</h1>
           <p>Gérez vos publications et notifications en toute simplicité</p>
         </div>
 
-        {/* Stats */}
         <div className="stats-grid">
           <div className="stat-card">
             <div className="stat-icon warning"><i className="fas fa-bell" /></div>
@@ -751,15 +677,12 @@ const PublierPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Banner */}
         {banner && (
           <div className={`message ${banner.type} show`}>
-            <i className={bannerIcon} />
-            <span>{banner.text}</span>
+            <i className={bannerIcon} /><span>{banner.text}</span>
           </div>
         )}
 
-        {/* Tabs */}
         <div className="tabs-container">
           {(['article', 'notification'] as TabType[]).map(t => (
             <button key={t} className={`tab-btn${activeTab === t ? ' active' : ''}`} onClick={() => setActiveTab(t)}>
@@ -773,26 +696,17 @@ const PublierPage: React.FC = () => {
         <div className={`tab-content${activeTab === 'article' ? ' active' : ''}`}>
           <div className="card">
             <div className="card-header">
-              <i className="fas fa-pen-fancy" />
-              <h2>Créer un nouvel article</h2>
+              <i className="fas fa-pen-fancy" /><h2>Créer un nouvel article</h2>
             </div>
-
             <form onSubmit={handleArticleSubmit}>
-              {/* Texte */}
               <div className="form-group">
-                <label><i className="fas fa-align-left" /> Contenu de l'article <span className="required">*</span></label>
-                <textarea
-                  value={texte}
-                  onChange={e => setTexte(e.target.value)}
-                  placeholder="Rédigez votre article ici... Soyez créatif ! ✨"
-                  required
-                />
+                <label><i className="fas fa-align-left" /> Contenu <span className="required">*</span></label>
+                <textarea value={texte} onChange={e => setTexte(e.target.value)}
+                  placeholder="Rédigez votre article ici... ✨" required />
               </div>
 
-              {/* Media upload */}
               <div className="upload-section">
-                <label><i className="fas fa-photo-video" /> Médias (Images ou Vidéos)</label>
-
+                <label><i className="fas fa-photo-video" /> Médias</label>
                 <div className="upload-tabs">
                   {(['images', 'video'] as UploadTab[]).map(t => (
                     <button key={t} type="button"
@@ -805,22 +719,20 @@ const PublierPage: React.FC = () => {
                   ))}
                 </div>
 
-                {/* Images */}
                 <div className={`upload-content${uploadTab === 'images' ? ' active' : ''}`}>
-                  <div
-                    className={`file-upload${dragOver ? ' drag-over' : ''}`}
+                  <div className={`file-upload${dragOver ? ' drag-over' : ''}`}
                     onClick={() => document.getElementById('images-input')?.click()}
                     onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                     onDragLeave={() => setDragOver(false)}
-                    onDrop={handleDrop}
-                  >
+                    onDrop={handleDrop}>
                     <i className="fas fa-cloud-upload-alt upload-icon" />
                     <div className="upload-text">
                       <h3>Glissez vos images ici</h3>
-                      <p>ou cliquez pour parcourir vos fichiers</p>
-                      <div className="upload-limit"><i className="fas fa-info-circle" /> JPG, PNG, GIF acceptés • Max 5MB par image</div>
+                      <p>ou cliquez pour parcourir</p>
+                      <div className="upload-limit"><i className="fas fa-info-circle" /> JPG, PNG, GIF • Max 5MB</div>
                     </div>
-                    <input id="images-input" type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleImagesInput} />
+                    <input id="images-input" type="file" accept="image/*" multiple style={{ display: 'none' }}
+                      onChange={e => processImageFiles(Array.from(e.target.files || []))} />
                   </div>
                   {selImages.length > 0 && (
                     <div className="preview-container">
@@ -828,26 +740,23 @@ const PublierPage: React.FC = () => {
                         <div key={i} className="preview-item">
                           <img src={item.dataUrl} alt={`preview-${i}`} />
                           <div className="preview-overlay" />
-                          <button type="button" className="remove-btn" onClick={() => removeImage(i)}>
+                          <button type="button" className="remove-btn" onClick={() => setSelImages(p => p.filter((_,j) => j !== i))}>
                             <i className="fas fa-trash-alt" />
                           </button>
-                          <div className="preview-info">
-                            <i className="fas fa-image" /><span>{formatFileSize(item.file.size)}</span>
-                          </div>
+                          <div className="preview-info"><i className="fas fa-image" /><span>{formatFileSize(item.file.size)}</span></div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Video */}
                 <div className={`upload-content${uploadTab === 'video' ? ' active' : ''}`}>
                   <div className="file-upload" onClick={() => document.getElementById('video-input')?.click()}>
                     <i className="fas fa-film upload-icon" />
                     <div className="upload-text">
                       <h3>Ajoutez votre vidéo</h3>
-                      <p>ou cliquez pour sélectionner un fichier</p>
-                      <div className="upload-limit"><i className="fas fa-info-circle" /> MP4, MOV, AVI acceptés • Max 50MB</div>
+                      <p>ou cliquez pour sélectionner</p>
+                      <div className="upload-limit"><i className="fas fa-info-circle" /> MP4, MOV, AVI • Max 50MB</div>
                     </div>
                     <input id="video-input" type="file" accept="video/*" style={{ display: 'none' }} onChange={handleVideoInput} />
                   </div>
@@ -860,16 +769,13 @@ const PublierPage: React.FC = () => {
                         <button type="button" className="remove-btn" onClick={() => setSelVideo(null)}>
                           <i className="fas fa-trash-alt" />
                         </button>
-                        <div className="preview-info">
-                          <i className="fas fa-video" /><span>{formatFileSize(selVideo.file.size)}</span>
-                        </div>
+                        <div className="preview-info"><i className="fas fa-video" /><span>{formatFileSize(selVideo.file.size)}</span></div>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* URLs */}
               <div className="form-group">
                 <label><i className="fas fa-link" /> Liens supplémentaires</label>
                 <div className="url-grid">
@@ -904,10 +810,8 @@ const PublierPage: React.FC = () => {
         <div className={`tab-content${activeTab === 'notification' ? ' active' : ''}`}>
           <div className="card">
             <div className="card-header">
-              <i className="fas fa-bullhorn" />
-              <h2>Envoyer une notification</h2>
+              <i className="fas fa-bullhorn" /><h2>Envoyer une notification</h2>
             </div>
-
             <form onSubmit={handleNotifSubmit}>
               <div className="form-group">
                 <label htmlFor="notif-user"><i className="fas fa-user-check" /> Destinataire</label>
@@ -918,32 +822,22 @@ const PublierPage: React.FC = () => {
                   ))}
                 </select>
               </div>
-
               <div className="form-group">
-                <label htmlFor="notif-texte">
-                  <i className="fas fa-comment-dots" /> Message de la notification <span className="required">*</span>
-                </label>
-                <textarea
-                  id="notif-texte" rows={6}
-                  placeholder="Rédigez votre notification..."
-                  value={notifTexte}
-                  onChange={e => setNotifTexte(e.target.value)}
-                  required
-                />
+                <label htmlFor="notif-texte"><i className="fas fa-comment-dots" /> Message <span className="required">*</span></label>
+                <textarea id="notif-texte" rows={6} placeholder="Rédigez votre notification..."
+                  value={notifTexte} onChange={e => setNotifTexte(e.target.value)} required />
               </div>
-
               <div className="btn-group">
                 <button type="button" className="btn-secondary" onClick={() => { setNotifTexte(''); setNotifUser('all'); }}>
                   <i className="fas fa-times" /> Annuler
                 </button>
                 <button type="submit" className="submit-btn" disabled={loading || !notifTexte.trim()}>
-                  <i className="fas fa-paper-plane" /> Envoyer la notification
+                  <i className="fas fa-paper-plane" /> Envoyer
                 </button>
               </div>
             </form>
           </div>
         </div>
-
       </div>
     </>
   );
