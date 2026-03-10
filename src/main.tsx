@@ -16,17 +16,3 @@ createRoot(container).render(
     </BrowserRouter>
   </React.StrictMode>
 );
-
-// Enregistrement du service worker (fichier à placer dans /public/service-worker.js)
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/service-worker.js')
-      .then((registration) => {
-        console.log('Service Worker enregistré :', registration.scope);
-      })
-      .catch((error) => {
-        console.error("Échec de l'enregistrement du Service Worker :", error);
-      });
-  });
-}
