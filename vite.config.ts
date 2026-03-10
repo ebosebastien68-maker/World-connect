@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    open: false
+    open: false // production-friendly : ne pas ouvrir le navigateur automatiquement
   },
   build: {
     outDir: 'dist',
@@ -21,11 +21,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': '/src'
+      '@': '/src', // permet import depuis '@/components/...'
     },
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom', 'framer-motion'],
   },
-  // publicDir par défaut = 'public', on laisse comme ça pour service-worker.js
 });
