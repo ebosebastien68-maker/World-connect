@@ -1,9 +1,8 @@
 // src/main.tsx
+import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import App from './App'; // pas d'extension
-import supabaseClient from './src/pages/supabaseClient'; // initialise le client côté client
-import { ServiceWorker } from './src/pages/ServiceWorker';
+import App from './App';
 
 const container = document.getElementById('root');
 if (!container) {
@@ -18,7 +17,16 @@ createRoot(container).render(
   </React.StrictMode>
 );
 
-// Enregistrer le service worker côté client (le fichier doit être dans /public/service-worker.js)
+// Enregistrement du service worker (fichier à placer dans /public/service-worker.js)
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  registerServiceWorker();
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/service-worker.js')
+      .then((registration) => {
+        console.log('Service Worker enregistré :', registration.scope);
+      })
+      .catch((error) => {
+        console.error("Échec de l'enregistrement du Service Worker :", error);
+      });
+  });
 }
