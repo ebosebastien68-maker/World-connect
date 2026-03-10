@@ -1,12 +1,15 @@
-// ============================================================================
-// WORLD CONNECT - CONNEXION.TSX
-// Converti depuis connexion.html — Version 5.0.3 PRO
-// ============================================================================
+// pages/connexion.tsx
+// ✅ Pages Router — pas de 'use client'
+// ✅ useRouter de 'next/router'
+// ✅ supabase importé directement depuis @/lib/supabaseClient
+// ✅ CSS intégré dans le fichier via injection <style>
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/router';
+import supabase from '@/lib/supabaseClient';
 
 // ============================================================================
-// CSS INLINE — injecté dans <style> au montage du composant
+// CSS INLINE
 // ============================================================================
 const STYLES = `
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -352,47 +355,6 @@ interface PasswordStrength {
   show: boolean;
 }
 
-// Déclarations ambiantes pour supabaseClient.js externe
-declare global {
-  interface Window {
-    supabaseClient: {
-      supabase: SupabaseAuthClient;
-      getCurrentUser: () => Promise<{ id: string } | null>;
-      getUserProfile: (id: string) => Promise<object | null>;
-      redirectByRole: () => Promise<void>;
-    };
-  }
-}
-
-interface SupabaseAuthClient {
-  auth: {
-    signInWithPassword: (opts: { email: string; password: string }) => Promise<{
-      data: { user: { id: string } };
-      error: { message: string } | null;
-    }>;
-    signUp: (opts: {
-      email: string;
-      password: string;
-      options?: { data?: object };
-    }) => Promise<{
-      data: { user: { id: string } | null };
-      error: { message: string } | null;
-    }>;
-    resetPasswordForEmail: (
-      email: string,
-      opts: { redirectTo: string }
-    ) => Promise<{ error: { message: string } | null }>;
-    signInWithOAuth: (opts: {
-      provider: string;
-      options?: { redirectTo?: string; queryParams?: object };
-    }) => Promise<{ data: unknown; error: { message: string } | null }>;
-    signOut: () => Promise<void>;
-  };
-  from: (table: string) => {
-    insert: (data: object) => Promise<{ error: { code?: string; message: string } | null }>;
-  };
-}
-
 // ============================================================================
 // SVG GOOGLE ICON
 // ============================================================================
@@ -405,703 +367,6 @@ const GoogleIcon: React.FC = () => (
     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
   </svg>
 );
-
-// ============================================================================
-// COMPOSANT PRINCIPAL — CONNEXION
-// ============================================================================
-
-const ConnexionPage: React.FC = () => {
-  // ── Injection du CSS dans le <head> ───────────────────────────────────────
-  useEffect(() => {
-    const styleTag = document.createElement('style');
-    styleTag.id = 'connexion-styles';
-    styleTag.textContent = STYLES;
-    document.head.appendChild(styleTag);
-    return () => { document.getElementById('connexion-styles')?.remove(); };
-  }, []);
-
-  // ── État ──────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<TabName>('connexion');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<MessageState>({ text: '', type: 'info', visible: false });
-
-  // Formulaire connexion
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
-
-  // Formulaire inscription
-  const [signupPrenom, setSignupPrenom] = useState('');
-  const [signupNom, setSignupNom] = useState('');
-  const [signupEmail, setSignupEmail] = useState('');
-  const [signupEmailStatus, setSignupEmailStatus] = useState<'valid' | 'invalid' | ''>('');
-  const [signupPassword, setSignupPassword] = useState('');
-  const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState<PasswordStrength>({
-    level: null,
-    text: '',
-    show: false,
-  });
-
-  // Formulaire reset
-  const [resetEmail, setResetEmail] = useState('');
-
-  // Indicateur tab
-  const [tabIndicator, setTabIndicator] = useState({ width: 0, left: 0 });
-
-  // ── Refs ───────────────────────────────────────────────────────────────────
-  const supabaseRef = useRef<SupabaseAuthClient | null>(null);
-  const tabsRef = useRef<HTMLDivElement>(null);
-  const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const formContainerRef = useRef<HTMLDivElement>(null);
-
-  // ============================================================================
-  // INITIALISATION SUPABASE
-  // ============================================================================
-
-  useEffect(() => {
-    const init = () => {
-      if (window.supabaseClient) {
-        supabaseRef.current = window.supabaseClient.supabase;
-        checkIfLoggedIn();
-      } else {
-        setTimeout(init, 100);
-      }
-    };
-    init();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const checkIfLoggedIn = async () => {
-    try {
-      const user = await window.supabaseClient.getCurrentUser();
-      if (user) await window.supabaseClient.redirectByRole();
-    } catch {}
-  };
-
-  // ============================================================================
-  // INDICATEUR DE TAB
-  // ============================================================================
-
-  const updateTabIndicator = useCallback(() => {
-    if (!tabsRef.current) return;
-    const activeEl = tabsRef.current.querySelector<HTMLButtonElement>('.tab.active');
-    if (activeEl) {
-      setTabIndicator({ width: activeEl.offsetWidth, left: activeEl.offsetLeft });
-    }
-  }, []);
-
-  useEffect(() => {
-    updateTabIndicator();
-    window.addEventListener('resize', updateTabIndicator);
-    return () => window.removeEventListener('resize', updateTabIndicator);
-  }, [activeTab, updateTabIndicator]);
-
-  // ============================================================================
-  // GESTION DES MESSAGES
-  // ============================================================================
-
-  const showMessage = useCallback((text: string, type: MessageType, duration = 5000) => {
-    if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
-    setMessage({ text, type, visible: true });
-    if (duration > 0) {
-      messageTimerRef.current = setTimeout(() => {
-        setMessage((prev) => ({ ...prev, visible: false }));
-      }, duration);
-    }
-  }, []);
-
-  const hideMessage = useCallback(() => {
-    if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
-    setMessage((prev) => ({ ...prev, visible: false }));
-  }, []);
-
-  const messageIcons: Record<MessageType, string> = {
-    success: 'fa-check-circle',
-    error: 'fa-exclamation-circle',
-    info: 'fa-info-circle',
-  };
-
-  // ============================================================================
-  // NAVIGATION TABS
-  // ============================================================================
-
-  const switchTab = useCallback(
-    (tab: TabName) => {
-      setActiveTab(tab);
-      hideMessage();
-      if (formContainerRef.current) formContainerRef.current.scrollTop = 0;
-    },
-    [hideMessage]
-  );
-
-  // Navigation clavier (flèches gauche/droite + Ctrl+Enter)
-  useEffect(() => {
-    const tabs: TabName[] = ['connexion', 'inscription', 'reset'];
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'Enter') {
-        const form = document.querySelector<HTMLFormElement>('.form-content.active form');
-        if (form) form.requestSubmit();
-        return;
-      }
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        setActiveTab((current) => {
-          const idx = tabs.indexOf(current);
-          const next =
-            e.key === 'ArrowLeft'
-              ? (idx - 1 + tabs.length) % tabs.length
-              : (idx + 1) % tabs.length;
-          return tabs[next];
-        });
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // ============================================================================
-  // TOGGLE MOT DE PASSE
-  // ============================================================================
-
-  const togglePassword = (field: 'login' | 'signup') => {
-    if (field === 'login') setShowLoginPassword((p) => !p);
-    else setShowSignupPassword((p) => !p);
-  };
-
-  // ============================================================================
-  // VALIDATION EMAIL
-  // ============================================================================
-
-  const handleSignupEmailChange = (value: string) => {
-    setSignupEmail(value);
-    if (!value) { setSignupEmailStatus(''); return; }
-    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-    setSignupEmailStatus(valid ? 'valid' : 'invalid');
-  };
-
-  // ============================================================================
-  // FORCE DU MOT DE PASSE
-  // ============================================================================
-
-  const handlePasswordChange = (value: string) => {
-    setSignupPassword(value);
-    if (!value) {
-      setPasswordStrength({ level: null, text: '', show: false });
-      return;
-    }
-    let strength = 0;
-    if (value.length >= 8) strength++;
-    if (/[a-z]/.test(value) && /[A-Z]/.test(value)) strength++;
-    if (/\d/.test(value)) strength++;
-    if (/[^a-zA-Z\d]/.test(value)) strength++;
-
-    if (strength <= 1)
-      setPasswordStrength({ level: 'weak',   text: '❌ Faible - Utilisez plus de caractères', show: true });
-    else if (strength <= 3)
-      setPasswordStrength({ level: 'medium', text: '⚠️ Moyen - Ajoutez des chiffres et symboles', show: true });
-    else
-      setPasswordStrength({ level: 'strong', text: '✅ Fort - Excellent mot de passe !', show: true });
-  };
-
-  // ============================================================================
-  // CONNEXIONS SOCIALES
-  // ============================================================================
-
-  const signInWithOAuth = useCallback(
-    async (provider: 'google' | 'github' | 'discord') => {
-      if (!supabaseRef.current) return;
-      try {
-        hideMessage();
-        showMessage(`Connexion avec ${provider} en cours...`, 'info');
-        const { error } = await supabaseRef.current.auth.signInWithOAuth({
-          provider,
-          options: {
-            redirectTo: `${window.location.origin}/home.tsx`,
-            ...(provider === 'google'
-              ? { queryParams: { access_type: 'offline', prompt: 'consent' } }
-              : {}),
-          },
-        });
-        if (error) throw error;
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Erreur inconnue';
-        showMessage(`Erreur lors de la connexion avec ${provider} : ${msg}`, 'error');
-      }
-    },
-    [hideMessage, showMessage]
-  );
-
-  // ============================================================================
-  // SOUMISSION — CONNEXION
-  // ============================================================================
-
-  const handleLogin = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!supabaseRef.current) return;
-      hideMessage();
-      setLoading(true);
-
-      try {
-        const { data, error } = await supabaseRef.current.auth.signInWithPassword({
-          email: loginEmail,
-          password: loginPassword,
-        });
-        if (error) throw error;
-
-        const profile = await window.supabaseClient.getUserProfile(data.user.id);
-        if (!profile) throw new Error("Profil utilisateur introuvable. Contactez l'administrateur.");
-
-        showMessage('✨ Connexion réussie ! Redirection...', 'success');
-        setTimeout(async () => {
-          await window.supabaseClient.redirectByRole();
-        }, 1500);
-      } catch (err: unknown) {
-        setLoading(false);
-        const msg = err instanceof Error ? err.message : 'Erreur inconnue';
-        if (msg.includes('Invalid login credentials')) {
-          showMessage('Email ou mot de passe incorrect. Vérifiez vos identifiants.', 'error');
-        } else {
-          showMessage(msg || 'Une erreur est survenue', 'error');
-        }
-      }
-    },
-    [loginEmail, loginPassword, hideMessage, showMessage]
-  );
-
-  // ============================================================================
-  // SOUMISSION — INSCRIPTION
-  // ============================================================================
-
-  const handleSignup = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!supabaseRef.current) return;
-
-      if (!termsAccepted) {
-        showMessage("Veuillez accepter les conditions d'utilisation", 'error');
-        return;
-      }
-
-      hideMessage();
-      setLoading(true);
-
-      try {
-        const { data: authData, error: authError } = await supabaseRef.current.auth.signUp({
-          email: signupEmail,
-          password: signupPassword,
-          options: {
-            data: {
-              full_name: `${signupPrenom} ${signupNom}`,
-              first_name: signupPrenom,
-              last_name: signupNom,
-            },
-          },
-        });
-
-        if (authError) throw authError;
-        if (!authData.user) throw new Error('Erreur lors de la création du compte');
-
-        await new Promise((r) => setTimeout(r, 1000));
-
-        const { error: profileError } = await supabaseRef.current
-          .from('users_profile')
-          .insert({ user_id: authData.user.id, prenom: signupPrenom, nom: signupNom, role: 'user' });
-
-        if (profileError && profileError.code !== '23505') {
-          throw new Error(`Erreur lors de la création du profil : ${profileError.message}`);
-        }
-
-        showMessage('🎉 Inscription réussie ! Un email de confirmation a été envoyé.', 'success');
-        setTimeout(() => { window.location.href = 'home.tsx'; }, 2500);
-      } catch (err: unknown) {
-        setLoading(false);
-        const msg = err instanceof Error ? err.message : 'Erreur inconnue';
-        if (msg.includes('already registered')) {
-          showMessage('Cette adresse email est déjà utilisée. Essayez de vous connecter.', 'error');
-        } else {
-          showMessage(msg || "Erreur lors de l'inscription", 'error');
-        }
-        if (msg.includes('profil')) {
-          try { await supabaseRef.current.auth.signOut(); } catch {}
-        }
-      }
-    },
-    [signupEmail, signupPassword, signupPrenom, signupNom, termsAccepted, hideMessage, showMessage]
-  );
-
-  // ============================================================================
-  // SOUMISSION — RESET MOT DE PASSE
-  // ============================================================================
-
-  const handleReset = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!supabaseRef.current) return;
-      hideMessage();
-      setLoading(true);
-
-      try {
-        const { error } = await supabaseRef.current.auth.resetPasswordForEmail(resetEmail, {
-          redirectTo: `${window.location.origin}/auth.tsx`,
-        });
-        if (error) throw error;
-        showMessage(
-          '📧 Email de réinitialisation envoyé ! Vérifiez votre boîte de réception (et les spams).',
-          'success'
-        );
-        setLoading(false);
-        setResetEmail('');
-      } catch (err: unknown) {
-        setLoading(false);
-        const msg = err instanceof Error ? err.message : 'Erreur inconnue';
-        showMessage(msg || 'Une erreur est survenue. Veuillez réessayer.', 'error');
-      }
-    },
-    [resetEmail, hideMessage, showMessage]
-  );
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
-
-  return (
-    <div className="container">
-      {/* En-tête */}
-      <div className="header">
-        <div className="logo">
-          <i className="fas fa-globe-americas"></i>
-          <span>World Connect</span>
-        </div>
-        <div className="tagline">Le Monde connecté à l'internet</div>
-      </div>
-
-      {/* Tabs */}
-      <div className="tabs" ref={tabsRef}>
-        <div
-          className="tab-indicator"
-          style={{ width: tabIndicator.width, left: tabIndicator.left }}
-        />
-        {(['connexion', 'inscription', 'reset'] as TabName[]).map((tab) => (
-          <button
-            key={tab}
-            className={`tab ${activeTab === tab ? 'active' : ''}`}
-            onClick={() => switchTab(tab)}
-          >
-            {tab === 'connexion' ? 'Connexion' : tab === 'inscription' ? 'Inscription' : 'Récupération'}
-          </button>
-        ))}
-      </div>
-
-      {/* Formulaires */}
-      <div className="form-container" ref={formContainerRef}>
-        {/* Message */}
-        {message.visible && (
-          <div className={`message ${message.type} show`}>
-            <i className={`fas ${messageIcons[message.type]}`}></i>
-            {message.text}
-          </div>
-        )}
-
-        {/* Loader */}
-        {loading && (
-          <div className="loader show">
-            <div className="spinner"></div>
-            <p className="loader-text">Chargement en cours...</p>
-          </div>
-        )}
-
-        {/* ── CONNEXION ────────────────────────────────────────────────────── */}
-        <div className={`form-content ${activeTab === 'connexion' && !loading ? 'active' : ''}`}>
-          <h2>👋 Bon retour !</h2>
-          <p className="subtitle">Connectez-vous pour continuer votre aventure</p>
-
-          <div className="user-guide">
-            <h4><i className="fas fa-lightbulb"></i> Conseil rapide</h4>
-            <p>Utilisez vos identifiants ou connectez-vous via un réseau social pour un accès plus rapide.</p>
-          </div>
-
-          {/* OAuth */}
-          <OAuthButtons onSelect={signInWithOAuth} />
-          <div className="divider"><span>OU AVEC EMAIL</span></div>
-
-          <form onSubmit={handleLogin}>
-            <div className="input-group">
-              <label htmlFor="login-email">
-                <i className="fas fa-envelope"></i> Adresse email
-              </label>
-              <div className="input-wrapper">
-                <i className="fas fa-envelope input-icon"></i>
-                <input
-                  type="email"
-                  id="login-email"
-                  required
-                  placeholder="exemple@email.com"
-                  autoComplete="email"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="input-group">
-              <label htmlFor="login-password">
-                <i className="fas fa-lock"></i> Mot de passe
-              </label>
-              <div className="input-wrapper">
-                <i className="fas fa-lock input-icon"></i>
-                <input
-                  type={showLoginPassword ? 'text' : 'password'}
-                  id="login-password"
-                  required
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                />
-                <i
-                  className={`fas ${showLoginPassword ? 'fa-eye-slash' : 'fa-eye'} password-toggle`}
-                  onClick={() => togglePassword('login')}
-                />
-              </div>
-            </div>
-            <button type="submit" className="btn">
-              <span>Se connecter</span>
-            </button>
-          </form>
-
-          <div className="action-links">
-            <button className="action-link" onClick={() => switchTab('reset')}>
-              <i className="fas fa-key"></i> Mot de passe oublié ?
-            </button>
-            <button className="action-link" onClick={() => switchTab('inscription')}>
-              <i className="fas fa-user-plus"></i> Créer un compte
-            </button>
-          </div>
-          <div className="switch-tab">
-            <p>Nouveau sur World Connect ?</p>
-            <button className="btn-secondary" onClick={() => switchTab('inscription')}>
-              <i className="fas fa-user-plus"></i> Inscrivez-vous ici
-            </button>
-          </div>
-        </div>
-
-        {/* ── INSCRIPTION ──────────────────────────────────────────────────── */}
-        <div className={`form-content ${activeTab === 'inscription' && !loading ? 'active' : ''}`}>
-          <h2>🚀 Créer un compte</h2>
-          <p className="subtitle">Rejoignez notre communauté en quelques secondes</p>
-
-          <div className="user-guide">
-            <h4><i className="fas fa-lightbulb"></i> Guide d'inscription</h4>
-            <p>Remplissez les champs ci-dessous ou utilisez une connexion sociale pour un processus plus rapide.</p>
-          </div>
-
-          <OAuthButtons onSelect={signInWithOAuth} />
-          <div className="divider"><span>OU AVEC EMAIL</span></div>
-
-          <form onSubmit={handleSignup}>
-            <div className="name-group">
-              <div className="input-group">
-                <label htmlFor="signup-prenom">
-                  <i className="fas fa-user"></i> Prénom
-                </label>
-                <div className="input-wrapper">
-                  <i className="fas fa-user input-icon"></i>
-                  <input
-                    type="text"
-                    id="signup-prenom"
-                    required
-                    placeholder="John"
-                    autoComplete="given-name"
-                    value={signupPrenom}
-                    onChange={(e) => setSignupPrenom(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="input-group">
-                <label htmlFor="signup-nom">
-                  <i className="fas fa-user-tag"></i> Nom
-                </label>
-                <div className="input-wrapper">
-                  <i className="fas fa-user-tag input-icon"></i>
-                  <input
-                    type="text"
-                    id="signup-nom"
-                    required
-                    placeholder="Doe"
-                    autoComplete="family-name"
-                    value={signupNom}
-                    onChange={(e) => setSignupNom(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="signup-email">
-                <i className="fas fa-envelope"></i> Email
-              </label>
-              <div className="input-wrapper">
-                <i className="fas fa-envelope input-icon"></i>
-                <input
-                  type="email"
-                  id="signup-email"
-                  required
-                  placeholder="exemple@email.com"
-                  autoComplete="email"
-                  className={signupEmailStatus === 'valid' ? 'success' : signupEmailStatus === 'invalid' ? 'error' : ''}
-                  value={signupEmail}
-                  onChange={(e) => handleSignupEmailChange(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="signup-password">
-                <i className="fas fa-lock"></i> Mot de passe
-              </label>
-              <div className="input-wrapper">
-                <i className="fas fa-lock input-icon"></i>
-                <input
-                  type={showSignupPassword ? 'text' : 'password'}
-                  id="signup-password"
-                  required
-                  placeholder="••••••••"
-                  minLength={6}
-                  autoComplete="new-password"
-                  value={signupPassword}
-                  onChange={(e) => handlePasswordChange(e.target.value)}
-                />
-                <i
-                  className={`fas ${showSignupPassword ? 'fa-eye-slash' : 'fa-eye'} password-toggle`}
-                  onClick={() => togglePassword('signup')}
-                />
-              </div>
-              {passwordStrength.show && (
-                <div className={`password-strength show strength-${passwordStrength.level}`}>
-                  <div className="strength-bar">
-                    <div className="strength-fill"></div>
-                  </div>
-                  <div className="strength-text">{passwordStrength.text}</div>
-                </div>
-              )}
-            </div>
-
-            <div className="checkbox-group">
-              <input
-                type="checkbox"
-                id="terms"
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
-              />
-              <label htmlFor="terms">
-                J'accepte les{' '}
-                <a href="#" onClick={(e) => e.preventDefault()}>conditions d'utilisation</a>
-                {' '}et la{' '}
-                <a href="#" onClick={(e) => e.preventDefault()}>politique de confidentialité</a>
-              </label>
-            </div>
-
-            <button type="submit" className="btn">
-              <span>Créer mon compte</span>
-            </button>
-          </form>
-
-          <div className="features">
-            <h3><i className="fas fa-star"></i> Pourquoi nous rejoindre ?</h3>
-            <div className="feature-list">
-              {[
-                'Compte 100% gratuit',
-                'Accès à toutes les fonctionnalités',
-                'Connexion sécurisée',
-                'Support 24/7',
-              ].map((feat) => (
-                <div key={feat} className="feature-item">
-                  <i className="fas fa-check-circle"></i>
-                  <span>{feat}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="switch-tab">
-            <p>Vous avez déjà un compte ?</p>
-            <button className="btn-secondary" onClick={() => switchTab('connexion')}>
-              <i className="fas fa-sign-in-alt"></i> Connectez-vous ici
-            </button>
-          </div>
-        </div>
-
-        {/* ── RESET ────────────────────────────────────────────────────────── */}
-        <div className={`form-content ${activeTab === 'reset' && !loading ? 'active' : ''}`}>
-          <h2>🔐 Récupération de mot de passe</h2>
-          <p className="subtitle">Pas de problème, nous allons vous aider</p>
-
-          <div className="user-guide">
-            <h4><i className="fas fa-info-circle"></i> Comment ça marche</h4>
-            <p>Entrez votre email, nous vous enverrons un lien sécurisé pour réinitialiser votre mot de passe.</p>
-          </div>
-
-          <div className="info-text">
-            <i className="fas fa-shield-alt"></i>
-            <div>
-              <strong>Sécurité garantie :</strong> Le lien de réinitialisation est valable 24 heures et ne peut être utilisé qu'une seule fois.
-            </div>
-          </div>
-
-          <form onSubmit={handleReset}>
-            <div className="input-group">
-              <label htmlFor="reset-email">
-                <i className="fas fa-envelope"></i> Email associé à votre compte
-              </label>
-              <div className="input-wrapper">
-                <i className="fas fa-envelope input-icon"></i>
-                <input
-                  type="email"
-                  id="reset-email"
-                  required
-                  placeholder="exemple@email.com"
-                  autoComplete="email"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                />
-              </div>
-            </div>
-            <button type="submit" className="btn">
-              <span>Envoyer le lien de réinitialisation</span>
-            </button>
-          </form>
-
-          <div className="action-links">
-            <button className="action-link" onClick={() => switchTab('connexion')}>
-              <i className="fas fa-arrow-left"></i> Retour à la connexion
-            </button>
-            <button className="action-link" onClick={() => switchTab('inscription')}>
-              <i className="fas fa-user-plus"></i> Créer un nouveau compte
-            </button>
-          </div>
-
-          <div className="features">
-            <h3><i className="fas fa-lightbulb"></i> Conseils de sécurité</h3>
-            <div className="feature-list">
-              {[
-                { icon: 'fa-lock',      text: 'Utilisez un mot de passe unique' },
-                { icon: 'fa-sync-alt',  text: 'Changez votre mot de passe régulièrement' },
-                { icon: 'fa-envelope',  text: 'Vérifiez votre boîte spam si vous ne recevez pas l\'email' },
-              ].map(({ icon, text }) => (
-                <div key={text} className="feature-item">
-                  <i className={`fas ${icon}`}></i>
-                  <span>{text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // ============================================================================
 // SOUS-COMPOSANT — BOUTONS OAUTH
@@ -1125,5 +390,427 @@ const OAuthButtons: React.FC<{
     </button>
   </div>
 );
+
+// ============================================================================
+// COMPOSANT PRINCIPAL
+// ============================================================================
+
+const ConnexionPage: React.FC = () => {
+  const router = useRouter();
+
+  // ── Injection CSS ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const styleTag = document.createElement('style');
+    styleTag.id = 'connexion-styles';
+    styleTag.textContent = STYLES;
+    document.head.appendChild(styleTag);
+    return () => { document.getElementById('connexion-styles')?.remove(); };
+  }, []);
+
+  // ── État ───────────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<TabName>('connexion');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<MessageState>({ text: '', type: 'info', visible: false });
+
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  const [signupPrenom, setSignupPrenom] = useState('');
+  const [signupNom, setSignupNom] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupEmailStatus, setSignupEmailStatus] = useState<'valid' | 'invalid' | ''>('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState<PasswordStrength>({ level: null, text: '', show: false });
+
+  const [resetEmail, setResetEmail] = useState('');
+  const [tabIndicator, setTabIndicator] = useState({ width: 0, left: 0 });
+
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const formContainerRef = useRef<HTMLDivElement>(null);
+
+  // ── Vérif connexion existante ──────────────────────────────────────────────
+  useEffect(() => {
+    const checkIfLoggedIn = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) router.push('/');
+      } catch {}
+    };
+    checkIfLoggedIn();
+  }, [router]);
+
+  // ── Indicateur tab ─────────────────────────────────────────────────────────
+  const updateTabIndicator = useCallback(() => {
+    if (!tabsRef.current) return;
+    const activeEl = tabsRef.current.querySelector<HTMLButtonElement>('.tab.active');
+    if (activeEl) setTabIndicator({ width: activeEl.offsetWidth, left: activeEl.offsetLeft });
+  }, []);
+
+  useEffect(() => {
+    updateTabIndicator();
+    window.addEventListener('resize', updateTabIndicator);
+    return () => window.removeEventListener('resize', updateTabIndicator);
+  }, [activeTab, updateTabIndicator]);
+
+  // ── Messages ───────────────────────────────────────────────────────────────
+  const showMessage = useCallback((text: string, type: MessageType, duration = 5000) => {
+    if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
+    setMessage({ text, type, visible: true });
+    if (duration > 0) messageTimerRef.current = setTimeout(() => setMessage((p) => ({ ...p, visible: false })), duration);
+  }, []);
+
+  const hideMessage = useCallback(() => {
+    if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
+    setMessage((p) => ({ ...p, visible: false }));
+  }, []);
+
+  const messageIcons: Record<MessageType, string> = {
+    success: 'fa-check-circle',
+    error: 'fa-exclamation-circle',
+    info: 'fa-info-circle',
+  };
+
+  // ── Navigation tabs ────────────────────────────────────────────────────────
+  const switchTab = useCallback((tab: TabName) => {
+    setActiveTab(tab);
+    hideMessage();
+    if (formContainerRef.current) formContainerRef.current.scrollTop = 0;
+  }, [hideMessage]);
+
+  useEffect(() => {
+    const tabs: TabName[] = ['connexion', 'inscription', 'reset'];
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        setActiveTab((current) => {
+          const idx = tabs.indexOf(current);
+          return tabs[e.key === 'ArrowLeft' ? (idx - 1 + tabs.length) % tabs.length : (idx + 1) % tabs.length];
+        });
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // ── OAuth ──────────────────────────────────────────────────────────────────
+  const signInWithOAuth = useCallback(async (provider: 'google' | 'github' | 'discord') => {
+    try {
+      hideMessage();
+      showMessage(`Connexion avec ${provider} en cours...`, 'info');
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/`,
+          ...(provider === 'google' ? { queryParams: { access_type: 'offline', prompt: 'consent' } } : {}),
+        },
+      });
+      if (error) throw error;
+    } catch (err: unknown) {
+      showMessage(`Erreur ${provider} : ${err instanceof Error ? err.message : 'Erreur inconnue'}`, 'error');
+    }
+  }, [hideMessage, showMessage]);
+
+  // ── Connexion ──────────────────────────────────────────────────────────────
+  const handleLogin = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    hideMessage();
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+      if (error) throw error;
+
+      const { data: profile } = await supabase.from('users_profile').select('role').eq('user_id', data.user.id).single();
+      if (!profile) throw new Error("Profil introuvable. Contactez l'administrateur.");
+
+      showMessage('✨ Connexion réussie ! Redirection...', 'success');
+      // ✅ router.push remplace window.location.href
+      setTimeout(() => router.push('/'), 1500);
+    } catch (err: unknown) {
+      setLoading(false);
+      const msg = err instanceof Error ? err.message : 'Erreur inconnue';
+      showMessage(msg.includes('Invalid login credentials') ? 'Email ou mot de passe incorrect.' : msg, 'error');
+    }
+  }, [loginEmail, loginPassword, hideMessage, showMessage, router]);
+
+  // ── Inscription ────────────────────────────────────────────────────────────
+  const handleSignup = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!termsAccepted) { showMessage("Veuillez accepter les conditions d'utilisation", 'error'); return; }
+    hideMessage();
+    setLoading(true);
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: signupEmail,
+        password: signupPassword,
+        options: { data: { full_name: `${signupPrenom} ${signupNom}`, first_name: signupPrenom, last_name: signupNom } },
+      });
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Erreur lors de la création du compte');
+
+      await new Promise((r) => setTimeout(r, 1000));
+
+      const { error: profileError } = await supabase.from('users_profile').insert({
+        user_id: authData.user.id, prenom: signupPrenom, nom: signupNom, role: 'user',
+      });
+      if (profileError && (profileError as { code?: string }).code !== '23505') {
+        throw new Error(`Erreur profil : ${profileError.message}`);
+      }
+
+      showMessage('🎉 Inscription réussie ! Un email de confirmation a été envoyé.', 'success');
+      // ✅ router.push remplace window.location.href
+      setTimeout(() => router.push('/'), 2500);
+    } catch (err: unknown) {
+      setLoading(false);
+      const msg = err instanceof Error ? err.message : 'Erreur inconnue';
+      showMessage(msg.includes('already registered') ? 'Email déjà utilisé. Essayez de vous connecter.' : msg, 'error');
+      if (msg.includes('profil')) { try { await supabase.auth.signOut(); } catch {} }
+    }
+  }, [signupEmail, signupPassword, signupPrenom, signupNom, termsAccepted, hideMessage, showMessage, router]);
+
+  // ── Reset mot de passe ─────────────────────────────────────────────────────
+  const handleReset = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    hideMessage();
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        // ✅ /auth remplace auth.tsx
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      if (error) throw error;
+      showMessage('📧 Email envoyé ! Vérifiez votre boîte (et les spams).', 'success');
+      setLoading(false);
+      setResetEmail('');
+    } catch (err: unknown) {
+      setLoading(false);
+      showMessage(err instanceof Error ? err.message : 'Une erreur est survenue.', 'error');
+    }
+  }, [resetEmail, hideMessage, showMessage]);
+
+  // ── Validation email / mot de passe ───────────────────────────────────────
+  const handleSignupEmailChange = (value: string) => {
+    setSignupEmail(value);
+    if (!value) { setSignupEmailStatus(''); return; }
+    setSignupEmailStatus(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? 'valid' : 'invalid');
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setSignupPassword(value);
+    if (!value) { setPasswordStrength({ level: null, text: '', show: false }); return; }
+    let s = 0;
+    if (value.length >= 8) s++;
+    if (/[a-z]/.test(value) && /[A-Z]/.test(value)) s++;
+    if (/\d/.test(value)) s++;
+    if (/[^a-zA-Z\d]/.test(value)) s++;
+    if (s <= 1) setPasswordStrength({ level: 'weak',   text: '❌ Faible',  show: true });
+    else if (s <= 3) setPasswordStrength({ level: 'medium', text: '⚠️ Moyen',  show: true });
+    else setPasswordStrength({ level: 'strong', text: '✅ Fort',   show: true });
+  };
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
+
+  return (
+    <div className="container">
+      <div className="header">
+        <div className="logo">
+          <i className="fas fa-globe-americas"></i>
+          <span>World Connect</span>
+        </div>
+        <div className="tagline">Le Monde connecté à l'internet</div>
+      </div>
+
+      <div className="tabs" ref={tabsRef}>
+        <div className="tab-indicator" style={{ width: tabIndicator.width, left: tabIndicator.left }} />
+        {(['connexion', 'inscription', 'reset'] as TabName[]).map((tab) => (
+          <button key={tab} className={`tab ${activeTab === tab ? 'active' : ''}`} onClick={() => switchTab(tab)}>
+            {tab === 'connexion' ? 'Connexion' : tab === 'inscription' ? 'Inscription' : 'Récupération'}
+          </button>
+        ))}
+      </div>
+
+      <div className="form-container" ref={formContainerRef}>
+        {message.visible && (
+          <div className={`message ${message.type} show`}>
+            <i className={`fas ${messageIcons[message.type]}`}></i>
+            {message.text}
+          </div>
+        )}
+
+        {loading && (
+          <div className="loader show">
+            <div className="spinner"></div>
+            <p className="loader-text">Chargement en cours...</p>
+          </div>
+        )}
+
+        {/* ── CONNEXION ── */}
+        <div className={`form-content ${activeTab === 'connexion' && !loading ? 'active' : ''}`}>
+          <h2>👋 Bon retour !</h2>
+          <p className="subtitle">Connectez-vous pour continuer votre aventure</p>
+          <div className="user-guide">
+            <h4><i className="fas fa-lightbulb"></i> Conseil rapide</h4>
+            <p>Utilisez vos identifiants ou connectez-vous via un réseau social.</p>
+          </div>
+          <OAuthButtons onSelect={signInWithOAuth} />
+          <div className="divider"><span>OU AVEC EMAIL</span></div>
+          <form onSubmit={handleLogin}>
+            <div className="input-group">
+              <label htmlFor="login-email"><i className="fas fa-envelope"></i> Adresse email</label>
+              <div className="input-wrapper">
+                <i className="fas fa-envelope input-icon"></i>
+                <input type="email" id="login-email" required placeholder="exemple@email.com" autoComplete="email"
+                  value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
+              </div>
+            </div>
+            <div className="input-group">
+              <label htmlFor="login-password"><i className="fas fa-lock"></i> Mot de passe</label>
+              <div className="input-wrapper">
+                <i className="fas fa-lock input-icon"></i>
+                <input type={showLoginPassword ? 'text' : 'password'} id="login-password" required
+                  placeholder="••••••••" autoComplete="current-password"
+                  value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
+                <i className={`fas ${showLoginPassword ? 'fa-eye-slash' : 'fa-eye'} password-toggle`}
+                  onClick={() => setShowLoginPassword((p) => !p)} />
+              </div>
+            </div>
+            <button type="submit" className="btn"><span>Se connecter</span></button>
+          </form>
+          <div className="action-links">
+            <button className="action-link" onClick={() => switchTab('reset')}><i className="fas fa-key"></i> Mot de passe oublié ?</button>
+            <button className="action-link" onClick={() => switchTab('inscription')}><i className="fas fa-user-plus"></i> Créer un compte</button>
+          </div>
+          <div className="switch-tab">
+            <p>Nouveau sur World Connect ?</p>
+            <button className="btn-secondary" onClick={() => switchTab('inscription')}><i className="fas fa-user-plus"></i> Inscrivez-vous ici</button>
+          </div>
+        </div>
+
+        {/* ── INSCRIPTION ── */}
+        <div className={`form-content ${activeTab === 'inscription' && !loading ? 'active' : ''}`}>
+          <h2>🚀 Créer un compte</h2>
+          <p className="subtitle">Rejoignez notre communauté en quelques secondes</p>
+          <div className="user-guide">
+            <h4><i className="fas fa-lightbulb"></i> Guide d'inscription</h4>
+            <p>Remplissez les champs ou utilisez une connexion sociale.</p>
+          </div>
+          <OAuthButtons onSelect={signInWithOAuth} />
+          <div className="divider"><span>OU AVEC EMAIL</span></div>
+          <form onSubmit={handleSignup}>
+            <div className="name-group">
+              <div className="input-group">
+                <label htmlFor="signup-prenom"><i className="fas fa-user"></i> Prénom</label>
+                <div className="input-wrapper">
+                  <i className="fas fa-user input-icon"></i>
+                  <input type="text" id="signup-prenom" required placeholder="John" autoComplete="given-name"
+                    value={signupPrenom} onChange={(e) => setSignupPrenom(e.target.value)} />
+                </div>
+              </div>
+              <div className="input-group">
+                <label htmlFor="signup-nom"><i className="fas fa-user-tag"></i> Nom</label>
+                <div className="input-wrapper">
+                  <i className="fas fa-user-tag input-icon"></i>
+                  <input type="text" id="signup-nom" required placeholder="Doe" autoComplete="family-name"
+                    value={signupNom} onChange={(e) => setSignupNom(e.target.value)} />
+                </div>
+              </div>
+            </div>
+            <div className="input-group">
+              <label htmlFor="signup-email"><i className="fas fa-envelope"></i> Email</label>
+              <div className="input-wrapper">
+                <i className="fas fa-envelope input-icon"></i>
+                <input type="email" id="signup-email" required placeholder="exemple@email.com" autoComplete="email"
+                  className={signupEmailStatus === 'valid' ? 'success' : signupEmailStatus === 'invalid' ? 'error' : ''}
+                  value={signupEmail} onChange={(e) => handleSignupEmailChange(e.target.value)} />
+              </div>
+            </div>
+            <div className="input-group">
+              <label htmlFor="signup-password"><i className="fas fa-lock"></i> Mot de passe</label>
+              <div className="input-wrapper">
+                <i className="fas fa-lock input-icon"></i>
+                <input type={showSignupPassword ? 'text' : 'password'} id="signup-password" required
+                  placeholder="••••••••" minLength={6} autoComplete="new-password"
+                  value={signupPassword} onChange={(e) => handlePasswordChange(e.target.value)} />
+                <i className={`fas ${showSignupPassword ? 'fa-eye-slash' : 'fa-eye'} password-toggle`}
+                  onClick={() => setShowSignupPassword((p) => !p)} />
+              </div>
+              {passwordStrength.show && (
+                <div className={`password-strength show strength-${passwordStrength.level}`}>
+                  <div className="strength-bar"><div className="strength-fill"></div></div>
+                  <div className="strength-text">{passwordStrength.text}</div>
+                </div>
+              )}
+            </div>
+            <div className="checkbox-group">
+              <input type="checkbox" id="terms" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} />
+              <label htmlFor="terms">
+                J'accepte les <a href="#" onClick={(e) => e.preventDefault()}>conditions d'utilisation</a> et la <a href="#" onClick={(e) => e.preventDefault()}>politique de confidentialité</a>
+              </label>
+            </div>
+            <button type="submit" className="btn"><span>Créer mon compte</span></button>
+          </form>
+          <div className="features">
+            <h3><i className="fas fa-star"></i> Pourquoi nous rejoindre ?</h3>
+            <div className="feature-list">
+              {['Compte 100% gratuit', 'Accès à toutes les fonctionnalités', 'Connexion sécurisée', 'Support 24/7'].map((f) => (
+                <div key={f} className="feature-item"><i className="fas fa-check-circle"></i><span>{f}</span></div>
+              ))}
+            </div>
+          </div>
+          <div className="switch-tab">
+            <p>Vous avez déjà un compte ?</p>
+            <button className="btn-secondary" onClick={() => switchTab('connexion')}><i className="fas fa-sign-in-alt"></i> Connectez-vous ici</button>
+          </div>
+        </div>
+
+        {/* ── RESET ── */}
+        <div className={`form-content ${activeTab === 'reset' && !loading ? 'active' : ''}`}>
+          <h2>🔐 Récupération</h2>
+          <p className="subtitle">Nous allons vous aider à récupérer votre compte</p>
+          <div className="user-guide">
+            <h4><i className="fas fa-info-circle"></i> Comment ça marche</h4>
+            <p>Entrez votre email, nous vous enverrons un lien sécurisé.</p>
+          </div>
+          <div className="info-text">
+            <i className="fas fa-shield-alt"></i>
+            <div><strong>Sécurité garantie :</strong> Le lien est valable 24h et ne peut être utilisé qu'une seule fois.</div>
+          </div>
+          <form onSubmit={handleReset}>
+            <div className="input-group">
+              <label htmlFor="reset-email"><i className="fas fa-envelope"></i> Email associé à votre compte</label>
+              <div className="input-wrapper">
+                <i className="fas fa-envelope input-icon"></i>
+                <input type="email" id="reset-email" required placeholder="exemple@email.com" autoComplete="email"
+                  value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} />
+              </div>
+            </div>
+            <button type="submit" className="btn"><span>Envoyer le lien de réinitialisation</span></button>
+          </form>
+          <div className="action-links">
+            <button className="action-link" onClick={() => switchTab('connexion')}><i className="fas fa-arrow-left"></i> Retour à la connexion</button>
+            <button className="action-link" onClick={() => switchTab('inscription')}><i className="fas fa-user-plus"></i> Créer un nouveau compte</button>
+          </div>
+          <div className="features">
+            <h3><i className="fas fa-lightbulb"></i> Conseils de sécurité</h3>
+            <div className="feature-list">
+              {[
+                { icon: 'fa-lock',     text: 'Utilisez un mot de passe unique' },
+                { icon: 'fa-sync-alt', text: 'Changez votre mot de passe régulièrement' },
+                { icon: 'fa-envelope', text: 'Vérifiez votre boîte spam si vous ne recevez pas l\'email' },
+              ].map(({ icon, text }) => (
+                <div key={text} className="feature-item"><i className={`fas ${icon}`}></i><span>{text}</span></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default ConnexionPage;
