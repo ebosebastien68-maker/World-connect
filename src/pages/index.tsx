@@ -1,16 +1,12 @@
-'use client';
+// pages/index.tsx
+// ✅ Pages Router — pas de 'use client'
+// ✅ useRouter vient de 'next/router' (pas next/navigation)
+// ✅ CSS géré via _app.tsx
 
-// src/pages/index.tsx
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-} from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/router';
 import supabase from '@/lib/supabaseClient';
-import './style.css';
 
 // ============================================================================
 // TYPES
@@ -22,13 +18,8 @@ interface UserProfile {
   role: string;
 }
 
-interface ArticleImage {
-  image_url: string;
-}
-
-interface ArticleVideo {
-  video_url: string;
-}
+interface ArticleImage { image_url: string; }
+interface ArticleVideo { video_url: string; }
 
 interface Article {
   article_id: string;
@@ -67,29 +58,21 @@ interface SupabaseUser {
 // COMPOSANT TOAST
 // ============================================================================
 
-const ToastItem: React.FC<{
-  toast: Toast;
-  onRemove: (id: number) => void;
-}> = ({ toast, onRemove }) => {
+const ToastItem: React.FC<{ toast: Toast; onRemove: (id: number) => void }> = ({ toast, onRemove }) => {
   const icons: Record<ToastType, string> = {
     success: 'fa-check-circle',
     error: 'fa-exclamation-circle',
     warning: 'fa-exclamation-triangle',
     info: 'fa-info-circle',
   };
-
   return (
     <div className={`toast ${toast.type}`} onClick={() => onRemove(toast.id)}>
-      <div className="toast-icon">
-        <i className={`fas ${icons[toast.type]}`}></i>
-      </div>
+      <div className="toast-icon"><i className={`fas ${icons[toast.type]}`}></i></div>
       <div className="toast-content">
         <div className="toast-title">{toast.title}</div>
         <div className="toast-message">{toast.message}</div>
       </div>
-      <button className="toast-close" onClick={(e) => { e.stopPropagation(); onRemove(toast.id); }}>
-        ×
-      </button>
+      <button className="toast-close" onClick={(e) => { e.stopPropagation(); onRemove(toast.id); }}>×</button>
     </div>
   );
 };
@@ -109,17 +92,7 @@ const ArticleCard: React.FC<{
   onShare: (platform: string, articleId: string) => void;
   onNavigate: (path: string) => void;
   allArticles: Article[];
-}> = ({
-  article,
-  userProfile,
-  currentUser,
-  userReactions,
-  onReaction,
-  onDelete,
-  onViewReactions,
-  onShare,
-  onNavigate,
-}) => {
+}> = ({ article, userProfile, currentUser, userReactions, onReaction, onDelete, onViewReactions, onShare, onNavigate }) => {
   const [expanded, setExpanded] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -128,7 +101,6 @@ const ArticleCard: React.FC<{
 
   const author = article.users_profile || { prenom: 'Utilisateur', nom: 'Inconnu' };
   const initials = `${author.prenom[0]}${author.nom[0]}`.toUpperCase();
-
   const images = Array.isArray(article.article_images) ? article.article_images : [];
   const videos = Array.isArray(article.article_videos) ? article.article_videos : [];
   const imageClass = images.length === 1 ? 'single' : images.length === 2 ? 'double' : 'multiple';
@@ -140,7 +112,6 @@ const ArticleCard: React.FC<{
   const textContent = article.texte || '';
   const isLongText = textContent.length > 300;
   const displayText = isLongText && !expanded ? textContent.substring(0, 300) + '...' : textContent;
-
   const userArticleReactions = userReactions[article.article_id] || [];
   const commentCount = article.comment_count || 0;
 
@@ -168,7 +139,6 @@ const ArticleCard: React.FC<{
           <h3>{author.prenom} {author.nom}</h3>
           <p>{formattedDate}</p>
         </div>
-
         {userProfile?.role === 'admin' && (
           <div className="admin-options">
             <button className="options-btn" onClick={() => setShowAdminMenu(!showAdminMenu)}>
@@ -237,7 +207,7 @@ const ArticleCard: React.FC<{
 
       <div className="reactions">
         {(['like', 'love', 'rire', 'colere'] as const).map((type) => {
-          const icons: Record<string, string> = {
+          const reactionIcons: Record<string, string> = {
             like: 'fa-thumbs-up', love: 'fa-heart', rire: 'fa-laugh', colere: 'fa-angry',
           };
           const counts: Record<string, number> = {
@@ -245,12 +215,10 @@ const ArticleCard: React.FC<{
             rire: article.reaction_rire, colere: article.reaction_colere,
           };
           return (
-            <button
-              key={type}
+            <button key={type}
               className={`reaction-btn ${userArticleReactions.includes(type) ? 'active' : ''}`}
-              onClick={() => onReaction(article.article_id, type)}
-            >
-              <i className={`fas ${icons[type]}`}></i>
+              onClick={() => onReaction(article.article_id, type)}>
+              <i className={`fas ${reactionIcons[type]}`}></i>
               <span>{counts[type]}</span>
             </button>
           );
@@ -263,7 +231,6 @@ const ArticleCard: React.FC<{
           <span>Commentaires</span>
           {commentCount > 0 && <span className="comment-count-badge">{commentCount}</span>}
         </div>
-
         <div className="share-btn" onClick={(e) => { e.stopPropagation(); setShowShareMenu(!showShareMenu); }}>
           <i className="fas fa-share-alt"></i>
           {showShareMenu && (
@@ -280,15 +247,13 @@ const ArticleCard: React.FC<{
                   { cls: 'more', icon: 'fas fa-ellipsis-h', label: 'Plus' },
                 ].map(({ cls, icon, label }) => (
                   <a key={cls} className={`share-option ${cls}`} onClick={() => handleShareClick(cls)}>
-                    <i className={icon}></i>
-                    <span>{label}</span>
+                    <i className={icon}></i><span>{label}</span>
                   </a>
                 ))}
               </div>
             </div>
           )}
         </div>
-
         <div className="user-reactions-btn" onClick={() => onViewReactions(article.article_id)}>
           <i className="fas fa-users"></i>
         </div>
@@ -300,11 +265,10 @@ const ArticleCard: React.FC<{
 };
 
 // ============================================================================
-// COMPOSANT PRINCIPAL
+// PAGE PRINCIPALE
 // ============================================================================
 
 const HomePage: React.FC = () => {
-  // ✅ Next.js : useRouter remplace useNavigate
   const router = useRouter();
 
   const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
@@ -313,21 +277,18 @@ const HomePage: React.FC = () => {
   const [displayedArticles, setDisplayedArticles] = useState<Article[]>([]);
   const [currentPage, setCurrentPage] = useState<PageName>('home');
   const [userReactions, setUserReactions] = useState<Record<string, string[]>>({});
-
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResultCount, setSearchResultCount] = useState(0);
   const [showSearchInfo, setShowSearchInfo] = useState(false);
-
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [loading, setLoading] = useState(false);
   const [articlesLoading, setArticlesLoading] = useState(true);
   const [emptyState, setEmptyState] = useState(false);
   const [emptyStateContent, setEmptyStateContent] = useState<'default' | 'offline' | 'error'>('default');
   const [isOnline, setIsOnline] = useState(true);
-
   const [notifCount, setNotifCount] = useState(0);
   const [messageCount, setMessageCount] = useState(0);
   const [welcomeVisible, setWelcomeVisible] = useState(false);
@@ -341,14 +302,9 @@ const HomePage: React.FC = () => {
   const animFrameRef = useRef<number>(0);
 
   const pageLabels: Record<PageName, string> = {
-    home: 'Accueil',
-    messages: 'Messages',
-    notifications: 'Notifications',
-    plus: 'Connect Ultra',
-    game: 'Jeu de Course 3D',
+    home: 'Accueil', messages: 'Messages', notifications: 'Notifications',
+    plus: 'Connect Ultra', game: 'Jeu de Course 3D',
   };
-
-  // ── Toast ──────────────────────────────────────────────────────────────────
 
   const removeToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -360,12 +316,9 @@ const HomePage: React.FC = () => {
     if (duration > 0) setTimeout(() => removeToast(id), duration);
   }, [removeToast]);
 
-  // ── Dark Mode ──────────────────────────────────────────────────────────────
-
   useEffect(() => {
     const saved = localStorage.getItem('theme') || 'light';
     if (saved === 'dark') { setIsDarkMode(true); document.body.classList.add('dark-mode'); }
-    // ✅ isOnline initialisé côté client uniquement (navigator n'existe pas côté serveur)
     setIsOnline(navigator.onLine);
   }, []);
 
@@ -376,8 +329,6 @@ const HomePage: React.FC = () => {
     localStorage.setItem('theme', next ? 'dark' : 'light');
   };
 
-  // ── Offline ────────────────────────────────────────────────────────────────
-
   useEffect(() => {
     const onOnline = () => { setIsOnline(true); showToast('Connexion rétablie', 'Vous êtes de nouveau en ligne', 'success'); };
     const onOffline = () => { setIsOnline(false); showToast('Hors ligne', 'Certaines fonctionnalités peuvent être limitées', 'warning'); };
@@ -385,8 +336,6 @@ const HomePage: React.FC = () => {
     window.addEventListener('offline', onOffline);
     return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
   }, [showToast]);
-
-  // ── Three.js ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!threeContainerRef.current) return;
@@ -416,7 +365,6 @@ const HomePage: React.FC = () => {
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
     const material = new THREE.PointsMaterial({ size: 2, vertexColors: true, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
     const particles = new THREE.Points(geometry, material);
     scene.add(particles);
@@ -447,31 +395,24 @@ const HomePage: React.FC = () => {
     };
   }, []);
 
-  // ── Service Worker ─────────────────────────────────────────────────────────
-
   const initServiceWorker = useCallback(async () => {
     if (!('serviceWorker' in navigator)) return;
     try {
       const reg = await navigator.serviceWorker.register('/service-worker.js');
       swRegistrationRef.current = reg;
       navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data?.type === 'RESUBSCRIBE_PUSH') {
-          showToast('Notification', 'Veuillez réactiver les notifications', 'warning');
-        }
+        if (event.data?.type === 'RESUBSCRIBE_PUSH') showToast('Notification', 'Veuillez réactiver les notifications', 'warning');
       });
       await navigator.serviceWorker.ready;
     } catch (err) {
-      console.error('❌ Erreur Service Worker:', err);
+      console.error('❌ Service Worker:', err);
     }
   }, [showToast]);
-
-  // ── Push Notifications ─────────────────────────────────────────────────────
 
   const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    return new Uint8Array([...rawData].map((c) => c.charCodeAt(0)));
+    return new Uint8Array([...window.atob(base64)].map((c) => c.charCodeAt(0)));
   };
 
   const arrayBufferToBase64 = (buffer: ArrayBuffer): string =>
@@ -496,10 +437,9 @@ const HomePage: React.FC = () => {
   const subscribeToPush = useCallback(async (user: SupabaseUser) => {
     if (!swRegistrationRef.current) return;
     try {
-      const vapidKey = 'BH3HWUJHOVhPrzNe-XeKjVTls6_iExezM7hReypIioYDh49bui2j7r60bf_aGBMOtVJ0ReiQVGVfxZDVgELmjCA';
       const sub = await swRegistrationRef.current.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: urlBase64ToUint8Array('BH3HWUJHOVhPrzNe-XeKjVTls6_iExezM7hReypIioYDh49bui2j7r60bf_aGBMOtVJ0ReiQVGVfxZDVgELmjCA'),
       });
       await saveSubscriptionToDatabase(sub, user);
     } catch (err) {
@@ -518,7 +458,7 @@ const HomePage: React.FC = () => {
       }
       return;
     }
-    showToast('🔔 Restez informé', 'Activez les notifications pour ne rien manquer !', 'info', 8000);
+    showToast('🔔 Restez informé', 'Activez les notifications !', 'info', 8000);
     await new Promise((r) => setTimeout(r, 1500));
     const permission = await Notification.requestPermission();
     localStorage.setItem('notificationAsked', 'true');
@@ -526,26 +466,21 @@ const HomePage: React.FC = () => {
       await subscribeToPush(user);
       showToast('✅ Notifications activées', 'Vous recevrez nos actualités en temps réel !', 'success', 6000);
     } else if (permission === 'denied') {
-      showToast('🔕 Notifications désactivées', 'Réactivez-les dans les paramètres', 'warning', 6000);
+      showToast('🔕 Désactivées', 'Réactivez-les dans les paramètres', 'warning', 6000);
     }
   }, [subscribeToPush, showToast]);
-
-  // ── Articles ───────────────────────────────────────────────────────────────
 
   const loadArticles = useCallback(async () => {
     try {
       if (!navigator.onLine) throw new Error('Hors ligne');
       setArticlesLoading(true);
       setEmptyState(false);
-
       const { data: articles, error } = await supabase
         .from('articles')
         .select(`*, users_profile!articles_user_id_fkey (prenom, nom), article_images (image_url), article_videos (video_url)`)
         .order('date_created', { ascending: false });
-
       setArticlesLoading(false);
       if (error) throw error;
-
       if (!articles || articles.length === 0) {
         setAllArticles([]); setDisplayedArticles([]);
         setEmptyState(true); setEmptyStateContent('default');
@@ -556,7 +491,6 @@ const HomePage: React.FC = () => {
       setEmptyState(false);
     } catch {
       setArticlesLoading(false);
-      setDisplayedArticles([]);
       setEmptyState(true);
       setEmptyStateContent(!navigator.onLine ? 'offline' : 'error');
       showToast(!navigator.onLine ? 'Hors ligne' : 'Erreur', !navigator.onLine ? 'Vérifiez votre connexion' : 'Une erreur est survenue', 'error');
@@ -573,9 +507,7 @@ const HomePage: React.FC = () => {
         map[r.article_id].push(r.reaction_type);
       });
       setUserReactions(map);
-    } catch (err) {
-      console.warn('⚠️ Erreur réactions:', err);
-    }
+    } catch { /* silencieux */ }
   }, []);
 
   const loadNotificationCount = useCallback(async (user: SupabaseUser) => {
@@ -592,8 +524,6 @@ const HomePage: React.FC = () => {
     } catch { /* silencieux */ }
   }, []);
 
-  // ── Temps réel ─────────────────────────────────────────────────────────────
-
   const setupRealTimeUpdates = useCallback((user: SupabaseUser) => {
     supabase.channel('articles-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'articles' }, () => loadArticles()).subscribe();
     supabase.channel('reactions-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'article_reactions' }, () => { loadUserReactions(user); loadArticles(); }).subscribe();
@@ -601,20 +531,15 @@ const HomePage: React.FC = () => {
     supabase.channel('messages-changes').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${user.id}` }, () => loadMessageCount(user)).subscribe();
   }, [loadArticles, loadUserReactions, loadNotificationCount, loadMessageCount]);
 
-  // ── Réactions ──────────────────────────────────────────────────────────────
-
   const handleReaction = useCallback(async (articleId: string, reactionType: string) => {
     if (!currentUser || !userProfile) {
       showToast('Connexion requise', 'Connectez-vous pour réagir', 'warning');
-      // ✅ Next.js : router.push remplace navigate
       setTimeout(() => router.push('/connexion'), 2000);
       return;
     }
     if (!navigator.onLine) { showToast('Hors ligne', 'Impossible de réagir hors ligne', 'error'); return; }
-
     try {
       const { data: existing } = await supabase.from('article_reactions').select('*').eq('article_id', articleId).eq('user_id', currentUser.id).eq('reaction_type', reactionType).single();
-
       if (existing) {
         await supabase.from('article_reactions').delete().eq('reaction_id', (existing as { reaction_id: string }).reaction_id);
         setUserReactions((prev) => ({ ...prev, [articleId]: (prev[articleId] || []).filter((r) => r !== reactionType) }));
@@ -638,9 +563,7 @@ const HomePage: React.FC = () => {
       await loadArticles();
     } catch {
       showToast('Erreur', "Impossible de supprimer l'article", 'error');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [loadArticles, showToast]);
 
   const viewUserReactions = useCallback((articleId: string) => {
@@ -670,24 +593,19 @@ const HomePage: React.FC = () => {
     }
   }, [allArticles, showToast]);
 
-  // ── Recherche ──────────────────────────────────────────────────────────────
-
   const performSearch = useCallback(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) { setDisplayedArticles(allArticles); setShowSearchInfo(false); return; }
-    const filtered = allArticles.filter((a) => {
-      const text = a.texte.toLowerCase();
-      const author = `${a.users_profile.prenom} ${a.users_profile.nom}`.toLowerCase();
-      return text.includes(query) || author.includes(query);
-    });
+    const filtered = allArticles.filter((a) =>
+      a.texte.toLowerCase().includes(query) ||
+      `${a.users_profile.prenom} ${a.users_profile.nom}`.toLowerCase().includes(query)
+    );
     setSearchResultCount(filtered.length);
     setShowSearchInfo(true);
     setDisplayedArticles(filtered);
     showToast('Recherche', `${filtered.length} résultat(s)`, 'info');
     setTimeout(() => setSearchPanelOpen(false), 500);
   }, [searchQuery, allArticles, showToast]);
-
-  // ── Navigation interne (SPA pages) ────────────────────────────────────────
 
   const navigateToPage = useCallback((page: PageName) => {
     if (page === currentPage) return;
@@ -706,15 +624,12 @@ const HomePage: React.FC = () => {
       sessionStorage.removeItem('welcomeShown');
       await supabase.auth.signOut();
       showToast('Déconnexion', 'À bientôt !', 'success');
-      // ✅ Next.js : router.push remplace navigate
       setTimeout(() => router.push('/connexion'), 1000);
     } catch {
       setLoading(false);
       showToast('Erreur', 'Impossible de se déconnecter', 'error');
     }
   }, [showToast, router]);
-
-  // ── Menu ───────────────────────────────────────────────────────────────────
 
   const handleMenuToggle = () => {
     setMenuOpen((prev) => {
@@ -736,40 +651,27 @@ const HomePage: React.FC = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // ── Init principale ────────────────────────────────────────────────────────
-
   useEffect(() => {
     const init = async () => {
       await initServiceWorker();
-
       const manualLogout = sessionStorage.getItem('manualLogout');
-      if (manualLogout === 'true') {
-        sessionStorage.removeItem('manualLogout');
-        await loadArticles();
-        return;
-      }
-
+      if (manualLogout === 'true') { sessionStorage.removeItem('manualLogout'); await loadArticles(); return; }
       setLoading(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-
         if (user) {
           setCurrentUser(user);
           const { data: profile } = await supabase.from('users_profile').select('prenom, nom, role').eq('user_id', user.id).single();
-
           if (profile) {
             setUserProfile(profile as UserProfile);
-
             if (!sessionStorage.getItem('welcomeShown')) {
               sessionStorage.setItem('welcomeShown', 'true');
               setTimeout(() => { setWelcomeVisible(true); setTimeout(() => setWelcomeVisible(false), 3500); }, 500);
             }
-
             await loadUserReactions(user);
             setupRealTimeUpdates(user);
             loadNotificationCount(user);
             loadMessageCount(user);
-
             if (Notification.permission === 'granted') {
               const existing = await swRegistrationRef.current?.pushManager.getSubscription();
               if (!existing) subscribeToPush(user);
@@ -778,35 +680,23 @@ const HomePage: React.FC = () => {
             }
           }
         }
-      } catch (err) {
-        console.warn('⚠️ Erreur init:', err);
-      } finally {
-        setLoading(false);
-      }
-
+      } catch (err) { console.warn('⚠️ Erreur init:', err); }
+      finally { setLoading(false); }
       await loadArticles();
     };
-
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!currentUser) return;
-    const interval = setInterval(() => {
-      loadNotificationCount(currentUser);
-      loadMessageCount(currentUser);
-    }, 30000);
+    const interval = setInterval(() => { loadNotificationCount(currentUser); loadMessageCount(currentUser); }, 30000);
     const handleVisibility = () => {
       if (!document.hidden) { loadNotificationCount(currentUser); loadMessageCount(currentUser); loadArticles(); }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', handleVisibility); };
   }, [currentUser, loadNotificationCount, loadMessageCount, loadArticles]);
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
 
   return (
     <>
@@ -849,7 +739,6 @@ const HomePage: React.FC = () => {
           </button>
           <div className="navbar-left">World Connect</div>
         </div>
-
         <div className="navbar-content">
           {([
             { page: 'home', icon: 'fa-home', label: 'Accueil' },
@@ -864,9 +753,7 @@ const HomePage: React.FC = () => {
               {badge !== undefined && badge > 0 && <span className="badge">{badge}</span>}
             </div>
           ))}
-
           <div className="menu-divider"></div>
-
           {!currentUser ? (
             <div className="menu-item" onClick={() => router.push('/connexion')}>
               <i className="fas fa-sign-in-alt"></i><span>Connexion</span>
@@ -877,26 +764,21 @@ const HomePage: React.FC = () => {
               <span>{userProfile ? `${userProfile.prenom} ${userProfile.nom}` : 'Mon Profil'}</span>
             </div>
           )}
-
           {userProfile?.role === 'admin' && (
             <div className="menu-item" onClick={() => router.push('/publier')}>
               <i className="fas fa-edit"></i><span>Administration</span>
             </div>
           )}
-
           <div className="menu-item" onClick={() => router.push('/parametre')}>
             <i className="fas fa-cog"></i><span>Paramètres</span>
           </div>
-
           <div className="menu-divider"></div>
-
           {currentUser && (
             <div className="menu-item logout" onClick={handleLogout}>
               <i className="fas fa-sign-out-alt"></i><span>Déconnexion</span>
             </div>
           )}
         </div>
-
         <div className="navbar-footer">
           <button className="theme-toggle" onClick={toggleTheme}>
             <i className={`fas ${isDarkMode ? 'fa-sun' : 'fa-moon'}`}></i>
