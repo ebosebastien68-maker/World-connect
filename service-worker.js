@@ -1,41 +1,29 @@
 // ============================================================================
 // SERVICE WORKER PRODUCTION - WORLD CONNECT
-// ============================================================================
-// Version: 5.0.2 - Fix IDBRequest Clone Error
+// Version: 5.1.0 — Adapté pour Vite + Vercel
 // ============================================================================
 
 'use strict';
 
-// ----------------------------------------------------------------------------
-// CONFIGURATION
-// ----------------------------------------------------------------------------
-const VERSION = '5.0.2';
+const VERSION = '5.1.0';
 const CACHE_NAME = `worldconnect-v${VERSION}`;
 const CACHE_STATIC = `${CACHE_NAME}-static`;
 const CACHE_IMAGES = `${CACHE_NAME}-images`;
-const CACHE_OFFLINE_DATA = `${CACHE_NAME}-offline-data`;
 
-// Assets statiques
+// ✅ VITE ne génère PAS index.html à la racine — on cache seulement /
 const STATIC_ASSETS = [
   '/',
-  '/index.html',
   '/manifest.json',
-  '/connect_pro.png',
-  '/offline.html'
+  '/connect_pro.png'
 ];
 
-// URLs à TOUJOURS chercher sur le réseau
+// URLs à NE JAMAIS cacher (Supabase, auth, données temps réel)
 const NEVER_CACHE_PATTERNS = [
-  /\/api\//,
   /supabase\.co/,
+  /\/api\//,
   /\/auth\//,
   /realtime/,
   /\.json$/,
-  /\/notifications/,
-  /\/messages/,
-  /\/reactions/,
-  /\/comments/,
-  /\/articles/,
   /timestamp=/,
   /cache-bust=/
 ];
@@ -45,17 +33,18 @@ const CACHEABLE_PATTERNS = [
   /\.(png|jpg|jpeg|gif|svg|webp|ico)$/,
   /\.(css|js)$/,
   /fonts\//,
-  /\/static\//,
+  /\/assets\//,           // ✅ Vite génère les assets dans /assets/
   /cdnjs\.cloudflare\.com/,
-  /cdn\.jsdelivr\.net/
+  /cdn\.jsdelivr\.net/,
+  /fonts\.googleapis\.com/,
+  /fonts\.gstatic\.com/
 ];
 
-// Configuration
 const CONFIG = {
   MAX_CACHE_SIZE: 100,
   CACHE_MAX_AGE: 86400000, // 24h
   NOTIFICATION_ICON: '/connect_pro.png',
-  NETWORK_TIMEOUT: 5000,
+  NETWORK_TIMEOUT: 8000,
   VAPID_PUBLIC_KEY: 'BH3HWUJHOVhPrzNe-XeKjVTls6_iExezM7hReypIioYDh49bui2j7r60bf_aGBMOtVJ0ReiQVGVfxZDVgELmjCA',
   SYNC_RETRY_INTERVAL: 60000,
   MAX_SYNC_RETRIES: 5
@@ -65,15 +54,15 @@ const SUPPORT = {
   notifications: 'Notification' in self,
   push: 'PushManager' in self,
   cache: 'caches' in self,
-  backgroundSync: 'sync' in self.registration,
-  periodicBackgroundSync: 'periodicSync' in self.registration
+  backgroundSync: 'sync' in (self.registration || {}),
+  periodicBackgroundSync: 'periodicSync' in (self.registration || {})
 };
 
-console.log(`🚀 SW v${VERSION} - Support:`, SUPPORT);
+console.log(`🚀 SW v${VERSION} chargé`);
 
-// ----------------------------------------------------------------------------
+// ============================================================================
 // QUEUE DE SYNCHRONISATION
-// ----------------------------------------------------------------------------
+// ============================================================================
 
 class SyncQueue {
   constructor() {
@@ -84,85 +73,51 @@ class SyncQueue {
   async add(action) {
     this.queue.push({
       id: `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      action: action,
+      action,
       timestamp: Date.now(),
       retries: 0,
       maxRetries: CONFIG.MAX_SYNC_RETRIES
     });
-
-    console.log('📥 Action ajoutée à la queue:', action.type);
     await this.saveQueue();
-    
-    if (!this.processing) {
-      this.processQueue();
-    }
+    if (!this.processing) this.processQueue();
   }
 
   async processQueue() {
     if (this.processing || this.queue.length === 0) return;
-    
     this.processing = true;
-    console.log(`🔄 Traitement de ${this.queue.length} action(s)...`);
 
     while (this.queue.length > 0) {
       const item = this.queue[0];
-      
       try {
         await this.executeAction(item.action);
         this.queue.shift();
-        console.log('✅ Action synchronisée:', item.action.type);
-        
-        await this.notifyClients({
-          type: 'SYNC_SUCCESS',
-          action: item.action
-        });
+        await this.notifyClients({ type: 'SYNC_SUCCESS', action: item.action });
       } catch (error) {
-        console.error('❌ Erreur sync:', error);
         item.retries++;
-        
         if (item.retries >= item.maxRetries) {
           this.queue.shift();
-          console.warn('⚠️ Action abandonnée après', item.retries, 'tentatives');
-          
-          await this.notifyClients({
-            type: 'SYNC_FAILED',
-            action: item.action,
-            error: error.message
-          });
+          await this.notifyClients({ type: 'SYNC_FAILED', action: item.action, error: error.message });
         } else {
-          console.log(`🔄 Nouvelle tentative (${item.retries}/${item.maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, CONFIG.SYNC_RETRY_INTERVAL));
+          await new Promise(r => setTimeout(r, CONFIG.SYNC_RETRY_INTERVAL));
         }
       }
-      
       await this.saveQueue();
     }
-
     this.processing = false;
-    console.log('✅ Queue terminée');
   }
 
   async executeAction(action) {
     switch (action.type) {
-      case 'ADD_REACTION':
-        return await this.syncReaction(action.data);
-      case 'REMOVE_REACTION':
-        return await this.syncRemoveReaction(action.data);
-      case 'ADD_COMMENT':
-        return await this.syncComment(action.data);
-      case 'DELETE_COMMENT':
-        return await this.syncDeleteComment(action.data);
-      default:
-        throw new Error(`Type d'action inconnu: ${action.type}`);
+      case 'ADD_REACTION': return await this.syncReaction(action.data);
+      case 'REMOVE_REACTION': return await this.syncRemoveReaction(action.data);
+      case 'ADD_COMMENT': return await this.syncComment(action.data);
+      case 'DELETE_COMMENT': return await this.syncDeleteComment(action.data);
+      default: throw new Error(`Type inconnu: ${action.type}`);
     }
   }
 
   async syncReaction(data) {
-    if (!data.userToken) {
-      throw new Error('Token d\'authentification manquant');
-    }
-
-    const response = await fetch(`${data.supabaseUrl}/rest/v1/article_reactions`, {
+    const res = await fetch(`${data.supabaseUrl}/rest/v1/article_reactions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -170,44 +125,22 @@ class SyncQueue {
         'Authorization': `Bearer ${data.userToken}`,
         'Prefer': 'return=representation'
       },
-      body: JSON.stringify({
-        article_id: data.articleId,
-        user_id: data.userId,
-        reaction_type: data.reactionType
-      })
+      body: JSON.stringify({ article_id: data.articleId, user_id: data.userId, reaction_type: data.reactionType })
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-
-    return await response.json();
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
   }
 
   async syncRemoveReaction(data) {
-    if (!data.userToken) {
-      throw new Error('Token d\'authentification manquant');
-    }
-
-    const response = await fetch(
-      `${data.supabaseUrl}/rest/v1/article_reactions?reaction_id=eq.${data.reactionId}`,
-      {
-        method: 'DELETE',
-        headers: {
-          'apikey': data.supabaseKey,
-          'Authorization': `Bearer ${data.userToken}`
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    const res = await fetch(`${data.supabaseUrl}/rest/v1/article_reactions?reaction_id=eq.${data.reactionId}`, {
+      method: 'DELETE',
+      headers: { 'apikey': data.supabaseKey, 'Authorization': `Bearer ${data.userToken}` }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
   }
 
   async syncComment(data) {
-    const response = await fetch(`${data.supabaseUrl}/rest/v1/sessions_commentaires`, {
+    const res = await fetch(`${data.supabaseUrl}/rest/v1/sessions_commentaires`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -215,35 +148,18 @@ class SyncQueue {
         'Authorization': `Bearer ${data.userToken}`,
         'Prefer': 'return=representation'
       },
-      body: JSON.stringify({
-        article_id: data.articleId,
-        user_id: data.userId,
-        texte: data.content
-      })
+      body: JSON.stringify({ article_id: data.articleId, user_id: data.userId, texte: data.content })
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    return await response.json();
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
   }
 
   async syncDeleteComment(data) {
-    const response = await fetch(
-      `${data.supabaseUrl}/rest/v1/sessions_commentaires?session_id=eq.${data.commentId}`,
-      {
-        method: 'DELETE',
-        headers: {
-          'apikey': data.supabaseKey,
-          'Authorization': `Bearer ${data.userToken}`
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    const res = await fetch(`${data.supabaseUrl}/rest/v1/sessions_commentaires?session_id=eq.${data.commentId}`, {
+      method: 'DELETE',
+      headers: { 'apikey': data.supabaseKey, 'Authorization': `Bearer ${data.userToken}` }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
   }
 
   async saveQueue() {
@@ -251,39 +167,12 @@ class SyncQueue {
       const db = await this.openDB();
       const tx = db.transaction('syncQueue', 'readwrite');
       const store = tx.objectStore('syncQueue');
-      
-      // Clear d'abord
-      await new Promise((resolve, reject) => {
-        const clearReq = store.clear();
-        clearReq.onsuccess = () => resolve();
-        clearReq.onerror = () => reject(clearReq.error);
-      });
-      
-      // Ensuite ajouter les items
+      await new Promise((res, rej) => { const r = store.clear(); r.onsuccess = res; r.onerror = () => rej(r.error); });
       for (const item of this.queue) {
-        await new Promise((resolve, reject) => {
-          // 🔥 Sérialiser l'item pour éviter les références circulaires
-          const safeItem = {
-            id: item.id,
-            action: {
-              type: item.action.type,
-              data: JSON.parse(JSON.stringify(item.action.data))
-            },
-            timestamp: item.timestamp,
-            retries: item.retries,
-            maxRetries: item.maxRetries
-          };
-          
-          const addReq = store.add(safeItem);
-          addReq.onsuccess = () => resolve();
-          addReq.onerror = () => reject(addReq.error);
-        });
+        const safe = { id: item.id, action: { type: item.action.type, data: JSON.parse(JSON.stringify(item.action.data)) }, timestamp: item.timestamp, retries: item.retries, maxRetries: item.maxRetries };
+        await new Promise((res, rej) => { const r = store.add(safe); r.onsuccess = res; r.onerror = () => rej(r.error); });
       }
-      
-      console.log('💾 Queue sauvegardée');
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde queue:', error);
-    }
+    } catch (e) { console.error('❌ Erreur saveQueue:', e); }
   }
 
   async loadQueue() {
@@ -291,277 +180,159 @@ class SyncQueue {
       const db = await this.openDB();
       const tx = db.transaction('syncQueue', 'readonly');
       const store = tx.objectStore('syncQueue');
-      
-      // 🔥 Utiliser une Promise pour récupérer toutes les données
-      const items = await new Promise((resolve, reject) => {
-        const getAllReq = store.getAll();
-        getAllReq.onsuccess = () => resolve(getAllReq.result);
-        getAllReq.onerror = () => reject(getAllReq.error);
-      });
-      
+      const items = await new Promise((res, rej) => { const r = store.getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
       this.queue = items || [];
-      console.log(`📦 ${this.queue.length} action(s) chargée(s)`);
-      
-      if (this.queue.length > 0) {
-        this.processQueue();
-      }
-    } catch (error) {
-      console.error('❌ Erreur chargement queue:', error);
-      this.queue = [];
-    }
+      if (this.queue.length > 0) this.processQueue();
+    } catch (e) { this.queue = []; }
   }
 
   openDB() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('WorldConnectSync', 1);
-      
-      request.onerror = () => {
-        console.error('❌ Erreur ouverture DB:', request.error);
-        reject(request.error);
-      };
-      
-      request.onsuccess = () => {
-        console.log('✅ DB ouverte');
-        resolve(request.result); // 🔥 Retourner result, pas request
-      };
-      
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        
-        if (!db.objectStoreNames.contains('syncQueue')) {
-          const store = db.createObjectStore('syncQueue', { keyPath: 'id' });
-          console.log('📦 Store syncQueue créé');
-        }
-        
-        if (!db.objectStoreNames.contains('offlineData')) {
-          const store = db.createObjectStore('offlineData', { keyPath: 'key' });
-          console.log('📦 Store offlineData créé');
-        }
+      const req = indexedDB.open('WorldConnectSync', 1);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => resolve(req.result);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('syncQueue')) db.createObjectStore('syncQueue', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('offlineData')) db.createObjectStore('offlineData', { keyPath: 'key' });
       };
     });
   }
 
   async notifyClients(message) {
     const clients = await self.clients.matchAll({ type: 'window' });
-    
-    // 🔥 Sérialiser le message pour éviter les erreurs de clonage
-    const safeMessage = JSON.parse(JSON.stringify({
-      type: message.type,
-      action: message.action ? {
-        type: message.action.type,
-        timestamp: message.action.timestamp || Date.now()
-      } : undefined,
-      error: message.error || undefined
-    }));
-    
-    clients.forEach(client => {
-      try {
-        client.postMessage(safeMessage);
-      } catch (error) {
-        console.error('❌ Erreur postMessage:', error);
-      }
-    });
+    const safe = JSON.parse(JSON.stringify(message));
+    clients.forEach(c => { try { c.postMessage(safe); } catch (e) {} });
   }
 }
 
 const syncQueue = new SyncQueue();
 
-// ----------------------------------------------------------------------------
-// UTILITAIRES DE CACHE
-// ----------------------------------------------------------------------------
+// ============================================================================
+// UTILITAIRES CACHE
+// ============================================================================
 
-const mustUseNetwork = (url) => {
-  return NEVER_CACHE_PATTERNS.some(pattern => pattern.test(url));
-};
-
-const isCacheable = (url) => {
-  return CACHEABLE_PATTERNS.some(pattern => pattern.test(url));
-};
+const mustUseNetwork = (url) => NEVER_CACHE_PATTERNS.some(p => p.test(url));
+const isCacheable = (url) => CACHEABLE_PATTERNS.some(p => p.test(url));
 
 const cleanupCaches = async () => {
-  const cacheNames = await caches.keys();
-  const currentCaches = [CACHE_STATIC, CACHE_IMAGES, CACHE_OFFLINE_DATA];
-  
-  return Promise.all(
-    cacheNames
-      .filter(name => !currentCaches.includes(name))
-      .map(name => {
-        console.log(`🧹 Suppression cache: ${name}`);
-        return caches.delete(name);
-      })
-  );
+  const keys = await caches.keys();
+  return Promise.all(keys.filter(k => ![CACHE_STATIC, CACHE_IMAGES].includes(k)).map(k => caches.delete(k)));
 };
 
-const limitCacheSize = async (cacheName, maxItems) => {
+const limitCacheSize = async (cacheName, max) => {
   const cache = await caches.open(cacheName);
   const keys = await cache.keys();
-  
-  if (keys.length > maxItems) {
-    const toDelete = keys.slice(0, keys.length - maxItems);
-    await Promise.all(toDelete.map(key => cache.delete(key)));
-    console.log(`🧹 ${toDelete.length} images supprimées du cache`);
-  }
+  if (keys.length > max) await Promise.all(keys.slice(0, keys.length - max).map(k => cache.delete(k)));
 };
 
-const isCacheValid = (response) => {
-  if (!response) return false;
-  
-  const cacheDate = response.headers.get('sw-cached-at');
-  if (!cacheDate) return true;
-  
-  const age = Date.now() - parseInt(cacheDate);
-  return age < CONFIG.CACHE_MAX_AGE;
-};
-
-// ----------------------------------------------------------------------------
-// STRATÉGIES DE RÉCUPÉRATION
-// ----------------------------------------------------------------------------
+// ============================================================================
+// STRATÉGIES
+// ============================================================================
 
 const networkOnly = async (request) => {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), CONFIG.NETWORK_TIMEOUT);
-    
-    const response = await fetch(request, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    
-    return response;
-  } catch (error) {
+    const tid = setTimeout(() => controller.abort(), CONFIG.NETWORK_TIMEOUT);
+    const res = await fetch(request, { signal: controller.signal });
+    clearTimeout(tid);
+    return res;
+  } catch {
+    // ✅ Pour les navigations SPA : retourner / (pas offline.html qui n'existe pas)
     if (request.mode === 'navigate') {
       const cache = await caches.open(CACHE_STATIC);
-      const offline = await cache.match('/offline.html');
-      if (offline) return offline;
+      const root = await cache.match('/');
+      if (root) return root;
     }
-    
-    return new Response('Network Error', { 
-      status: 503, 
-      statusText: 'Service Unavailable',
-      headers: { 'Content-Type': 'text/plain' }
-    });
+    return new Response('Hors ligne', { status: 503, headers: { 'Content-Type': 'text/plain' } });
   }
 };
 
 const cacheFirst = async (request) => {
-  const cacheName = request.url.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)$/) 
-    ? CACHE_IMAGES 
-    : CACHE_STATIC;
-  
+  const cacheName = /\.(png|jpg|jpeg|gif|svg|webp|ico)$/.test(request.url) ? CACHE_IMAGES : CACHE_STATIC;
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
-  
-  if (cached && isCacheValid(cached)) {
-    return cached;
-  }
-  
+  if (cached) return cached;
+
   try {
-    const response = await fetch(request);
-    
-    if (response.ok) {
-      const headers = new Headers(response.headers);
-      headers.set('sw-cached-at', Date.now().toString());
-      
-      const responseToCache = new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: headers
-      });
-      
-      await cache.put(request, responseToCache.clone());
-      
-      if (cacheName === CACHE_IMAGES) {
-        await limitCacheSize(CACHE_IMAGES, CONFIG.MAX_CACHE_SIZE);
-      }
-      
-      return responseToCache;
+    const res = await fetch(request);
+    if (res.ok) {
+      await cache.put(request, res.clone());
+      if (cacheName === CACHE_IMAGES) await limitCacheSize(CACHE_IMAGES, CONFIG.MAX_CACHE_SIZE);
     }
-    
-    return response;
-  } catch (error) {
+    return res;
+  } catch {
     if (cached) return cached;
-    throw error;
+    throw new Error('Ressource indisponible');
   }
 };
 
 const networkFirstWithCache = async (request) => {
   try {
-    const response = await fetch(request);
-    
-    if (response.ok) {
+    const res = await fetch(request);
+    if (res.ok) {
       const cache = await caches.open(CACHE_STATIC);
-      await cache.put(request, response.clone());
+      await cache.put(request, res.clone());
     }
-    
-    return response;
-  } catch (error) {
+    return res;
+  } catch {
     const cache = await caches.open(CACHE_STATIC);
-    const cached = await cache.match(request);
-    
-    if (cached) return cached;
-    throw error;
+    // ✅ SPA : fallback vers / si la route n'est pas cachée
+    return (await cache.match(request)) || (await cache.match('/')) || new Response('Hors ligne', { status: 503 });
   }
 };
 
-// ----------------------------------------------------------------------------
-// ÉVÉNEMENTS DU SERVICE WORKER
-// ----------------------------------------------------------------------------
+// ============================================================================
+// ÉVÉNEMENTS
+// ============================================================================
 
 self.addEventListener('install', (event) => {
   console.log(`⚙️ Installation SW v${VERSION}`);
-  
-  event.waitUntil(
-    (async () => {
-      try {
-        const cache = await caches.open(CACHE_STATIC);
-        await cache.addAll(STATIC_ASSETS);
-        console.log('✅ Assets statiques cachés');
-        await self.skipWaiting();
-      } catch (error) {
-        console.error('❌ Erreur installation:', error);
-      }
-    })()
-  );
+  event.waitUntil((async () => {
+    try {
+      const cache = await caches.open(CACHE_STATIC);
+      // ✅ addAll avec gestion d'erreur individuelle (manifest.json peut être absent)
+      await Promise.allSettled(STATIC_ASSETS.map(url => cache.add(url).catch(e => console.warn(`⚠️ Impossible de cacher ${url}:`, e))));
+      await self.skipWaiting();
+      console.log('✅ Installation terminée');
+    } catch (e) {
+      console.error('❌ Erreur installation:', e);
+    }
+  })());
 });
 
 self.addEventListener('activate', (event) => {
   console.log(`🚀 Activation SW v${VERSION}`);
-  
-  event.waitUntil(
-    (async () => {
-      try {
-        await cleanupCaches();
-        await self.clients.claim();
-        await syncQueue.loadQueue();
-        
-        console.log('✅ SW activé');
-        
-        const clients = await self.clients.matchAll({ type: 'window' });
-        clients.forEach(client => {
-          try {
-            client.postMessage({
-              type: 'SW_ACTIVATED',
-              version: VERSION,
-              support: SUPPORT
-            });
-          } catch (error) {
-            console.error('❌ Erreur postMessage activation:', error);
-          }
-        });
-      } catch (error) {
-        console.error('❌ Erreur activation:', error);
-      }
-    })()
-  );
+  event.waitUntil((async () => {
+    await cleanupCaches();
+    await self.clients.claim();
+    await syncQueue.loadQueue();
+
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach(c => {
+      try { c.postMessage({ type: 'SW_ACTIVATED', version: VERSION, support: SUPPORT }); } catch {}
+    });
+    console.log('✅ SW activé');
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
-  
+
   if (request.method !== 'GET') return;
-  if (url.origin !== location.origin && !url.hostname.includes('supabase') && !url.hostname.includes('cdnjs') && !url.hostname.includes('jsdelivr')) return;
-  
+
+  // Ignorer les extensions Chrome et autres protocoles
+  if (!url.protocol.startsWith('http')) return;
+
+  // Origines autorisées
+  const isLocal = url.origin === location.origin;
+  const isAllowedExternal = url.hostname.includes('supabase') || url.hostname.includes('cdnjs') || url.hostname.includes('jsdelivr') || url.hostname.includes('fonts.googleapis') || url.hostname.includes('fonts.gstatic');
+
+  if (!isLocal && !isAllowedExternal) return;
+
   let strategy;
-  
+
   if (mustUseNetwork(url.href)) {
     strategy = networkOnly(request);
   } else if (isCacheable(url.href)) {
@@ -571,268 +342,109 @@ self.addEventListener('fetch', (event) => {
   } else {
     strategy = networkOnly(request);
   }
-  
+
   event.respondWith(strategy);
 });
 
-// ----------------------------------------------------------------------------
+// ============================================================================
 // BACKGROUND SYNC
-// ----------------------------------------------------------------------------
+// ============================================================================
 
 if (SUPPORT.backgroundSync) {
   self.addEventListener('sync', (event) => {
-    console.log('🔄 Background Sync:', event.tag);
-    
     if (event.tag === 'sync-reactions' || event.tag === 'sync-comments') {
       event.waitUntil(syncQueue.processQueue());
     }
   });
 }
 
-if (SUPPORT.periodicBackgroundSync) {
-  self.addEventListener('periodicsync', (event) => {
-    console.log('🔄 Periodic Sync:', event.tag);
-    
-    if (event.tag === 'sync-pending-actions') {
-      event.waitUntil(syncQueue.processQueue());
-    }
-  });
-}
-
-// ----------------------------------------------------------------------------
-// NOTIFICATIONS PUSH - 🔥 SECTION CORRIGÉE
-// ----------------------------------------------------------------------------
+// ============================================================================
+// PUSH NOTIFICATIONS
+// ============================================================================
 
 self.addEventListener('push', (event) => {
-  console.log('📩 Notification push reçue');
-  
-  if (!SUPPORT.push || !SUPPORT.notifications) {
-    console.warn('⚠️ Notifications non supportées');
-    return;
-  }
-  
-  event.waitUntil(
-    (async () => {
+  if (!SUPPORT.notifications) return;
+
+  event.waitUntil((async () => {
+    let data = {
+      title: 'World Connect',
+      body: 'Nouvelle notification',
+      icon: CONFIG.NOTIFICATION_ICON,
+      badge: CONFIG.NOTIFICATION_ICON,
+      tag: `notif-${Date.now()}`,
+      data: { url: '/' }
+    };
+
+    if (event.data) {
       try {
-        // Valeurs par défaut
-        let notificationData = {
-          title: 'World Connect',
-          body: 'Nouvelle notification',
-          icon: CONFIG.NOTIFICATION_ICON,
-          badge: CONFIG.NOTIFICATION_ICON,
-          tag: `notif-${Date.now()}`,
-          data: { url: '/' }
+        const payload = event.data.json();
+        const n = payload.notification || payload;
+        data = {
+          title: n.title || data.title,
+          body: n.body || n.message || data.body,
+          icon: n.icon || data.icon,
+          badge: n.badge || data.badge,
+          tag: n.tag || data.tag,
+          requireInteraction: n.requireInteraction || false,
+          data: { url: n.data?.url || payload.url || '/', ...(n.data || {}) }
         };
-        
-        // Parser les données de la notification
-        if (event.data) {
-          try {
-            const payload = event.data.json();
-            console.log('📦 Payload reçu:', JSON.stringify(payload, null, 2));
-            
-            // 🔥 FIX CRITIQUE: Le payload contient un objet "notification"
-            const notification = payload.notification || payload;
-            
-            console.log('🔍 Notification extraite:', JSON.stringify(notification, null, 2));
-            console.log('🔍 Title:', notification.title);
-            console.log('🔍 Body:', notification.body);
-            
-            notificationData = {
-              title: notification.title || payload.title || notificationData.title,
-              body: notification.body || notification.message || payload.body || payload.message || notificationData.body,
-              icon: notification.icon || payload.icon || notificationData.icon,
-              badge: notification.badge || payload.badge || notificationData.badge,
-              tag: notification.tag || payload.tag || notificationData.tag,
-              requireInteraction: notification.requireInteraction || payload.requireInteraction || (notification.priority >= 8),
-              data: {
-                url: notification.data?.url || payload.url || payload.data?.url || '/',
-                type: notification.data?.type || payload.type || payload.data?.type,
-                articleId: notification.data?.articleId || payload.articleId || payload.data?.articleId,
-                ...(notification.data || payload.data || {})
-              }
-            };
-            
-            console.log('✅ Notification finale:', JSON.stringify(notificationData, null, 2));
-            
-            // Actions (si supportées)
-            if ('actions' in Notification.prototype) {
-              notificationData.actions = notification.actions || payload.actions || [
-                { action: 'open', title: '👀 Voir', icon: '/icons/view.png' },
-                { action: 'dismiss', title: '✕ Fermer' }
-              ];
-            }
-            
-            // Vibration (si supportée)
-            if ('vibrate' in navigator) {
-              notificationData.vibrate = notification.vibrate || payload.vibrate || [200, 100, 200];
-            }
-          } catch (e) {
-            console.error('❌ Erreur parsing notification:', e);
-            console.error('Stack:', e.stack);
-            try {
-              console.error('Raw data:', event.data.text());
-            } catch (textError) {
-              console.error('Impossible de lire les données brutes');
-            }
-          }
-        } else {
-          console.warn('⚠️ Aucune donnée dans le push');
+        if ('actions' in Notification.prototype) {
+          data.actions = n.actions || [
+            { action: 'open', title: '👀 Voir' },
+            { action: 'dismiss', title: '✕ Fermer' }
+          ];
         }
-        
-        // Afficher la notification
-        console.log('📤 Affichage notification - Title:', notificationData.title, '| Body:', notificationData.body);
-        await self.registration.showNotification(notificationData.title, notificationData);
-        console.log('✅ Notification affichée avec succès');
-        
-        // Jouer un son (optionnel)
-        const clients = await self.clients.matchAll({ type: 'window' });
-        clients.forEach(client => {
-          try {
-            client.postMessage({
-              type: 'PLAY_NOTIFICATION_SOUND',
-              notification: {
-                title: notificationData.title,
-                body: notificationData.body
-              }
-            });
-          } catch (error) {
-            console.error('❌ Erreur postMessage son:', error);
-          }
-        });
-        
-      } catch (error) {
-        console.error('❌ Erreur affichage notification:', error);
-        console.error('Stack:', error.stack);
-      }
-    })()
-  );
+      } catch (e) { console.error('❌ Erreur parsing push:', e); }
+    }
+
+    await self.registration.showNotification(data.title, data);
+
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach(c => {
+      try { c.postMessage({ type: 'PLAY_NOTIFICATION_SOUND', notification: { title: data.title, body: data.body } }); } catch {}
+    });
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
-  console.log('🖱️ Notification cliquée:', event.action);
-  
   event.notification.close();
-  
-  const { action } = event;
+  if (event.action === 'dismiss') return;
+
   const { url, articleId } = event.notification.data || {};
-  
-  // Si action "dismiss", ne rien faire
-  if (action === 'dismiss') return;
-  
-  event.waitUntil(
-    (async () => {
-      // Déterminer l'URL à ouvrir
-      let urlToOpen = url || '/';
-      
-      // Si c'est une notification d'article, aller directement à l'article
-      if (articleId) {
-        urlToOpen = `/?article=${articleId}`;
-      }
-      
-      const fullUrl = new URL(urlToOpen, self.location.origin).href;
-      
-      // Chercher une fenêtre ouverte
-      const clients = await self.clients.matchAll({ 
-        type: 'window',
-        includeUncontrolled: true 
-      });
-      
-      // Si une fenêtre existe déjà, la focaliser
-      for (const client of clients) {
-        if (client.url === fullUrl && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      
-      // Sinon, ouvrir une nouvelle fenêtre
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(fullUrl);
-      }
-    })()
-  );
+  const urlToOpen = articleId ? `/?article=${articleId}` : (url || '/');
+  const fullUrl = new URL(urlToOpen, self.location.origin).href;
+
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of clients) {
+      if (c.url === fullUrl && 'focus' in c) return c.focus();
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(fullUrl);
+  })());
 });
 
-// ----------------------------------------------------------------------------
-// MESSAGES DES CLIENTS
-// ----------------------------------------------------------------------------
+// ============================================================================
+// MESSAGES
+// ============================================================================
 
 self.addEventListener('message', (event) => {
   const { type, payload } = event.data || {};
-  
   switch (type) {
-    case 'SKIP_WAITING':
-      self.skipWaiting();
-      break;
-      
+    case 'SKIP_WAITING': self.skipWaiting(); break;
     case 'CLEAR_CACHE':
-      event.waitUntil(
-        (async () => {
-          const names = await caches.keys();
-          await Promise.all(names.map(n => caches.delete(n)));
-          console.log('🧹 Tous les caches supprimés');
-        })()
-      );
+      event.waitUntil((async () => { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); })());
       break;
-      
     case 'GET_VERSION':
       if (event.ports?.[0]) {
-        try {
-          event.ports[0].postMessage({ 
-            version: VERSION,
-            support: SUPPORT,
-            queueLength: syncQueue.queue.length
-          });
-        } catch (error) {
-          console.error('❌ Erreur postMessage version:', error);
-        }
+        try { event.ports[0].postMessage({ version: VERSION, support: SUPPORT, queueLength: syncQueue.queue.length }); } catch {}
       }
       break;
-      
-    case 'SYNC_ACTION':
-      event.waitUntil(syncQueue.add(payload));
-      break;
-      
-    case 'FORCE_SYNC':
-      event.waitUntil(syncQueue.processQueue());
-      break;
-      
-    case 'GET_SYNC_QUEUE':
-      if (event.ports?.[0]) {
-        // 🔥 Sérialiser la queue avant envoi
-        const safeQueue = syncQueue.queue.map(item => ({
-          id: item.id,
-          type: item.action.type,
-          timestamp: item.timestamp,
-          retries: item.retries,
-          maxRetries: item.maxRetries
-        }));
-        
-        try {
-          event.ports[0].postMessage({ 
-            queue: safeQueue,
-            processing: syncQueue.processing
-          });
-        } catch (error) {
-          console.error('❌ Erreur envoi queue:', error);
-        }
-      }
-      break;
+    case 'SYNC_ACTION': event.waitUntil(syncQueue.add(payload)); break;
+    case 'FORCE_SYNC': event.waitUntil(syncQueue.processQueue()); break;
   }
 });
 
-// ----------------------------------------------------------------------------
-// GESTION D'ERREURS
-// ----------------------------------------------------------------------------
+self.addEventListener('error', (e) => console.error('❌ SW Error:', e.error));
+self.addEventListener('unhandledrejection', (e) => console.error('❌ Promise rejetée:', e.reason));
 
-self.addEventListener('error', (event) => {
-  console.error('❌ SW Error:', event.error);
-});
-
-self.addEventListener('unhandledrejection', (event) => {
-  console.error('❌ Unhandled Promise:', event.reason);
-});
-
-console.log(`✅ Service Worker v${VERSION} prêt pour la production!`);
-console.log('📱 Notifications Push: ACTIVÉES ET CORRIGÉES');
-console.log('🔄 Synchronisation optimiste: ACTIVÉE');
-console.log('🔥 Fix IDBRequest Clone: APPLIQUÉ');
+console.log(`✅ SW v${VERSION} prêt`);
