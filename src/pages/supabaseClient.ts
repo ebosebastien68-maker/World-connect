@@ -1,156 +1,78 @@
-// ============================================================================ // supabaseClient.ts — Client Supabase central (mis à jour pour Vercel) // ============================================================================
+// src/pages/supabaseClient.ts
+import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 
-import { createClient, type SupabaseClient, type User, type Session } from '@supabase/supabase-js';
+// ============================================================================
+// TYPES
+// ============================================================================
 
-// ============================================================================ // TYPES // ============================================================================
+export interface UserProfile {
+  user_id: string;
+  prenom: string;
+  nom: string;
+  role: 'admin' | 'user' | string;
+}
 
-export interface UserProfile { user_id: string; prenom: string; nom: string; role: 'admin' | 'user' | string; }
+// ============================================================================
+// CONFIG — variables Vite (préfixe VITE_ obligatoire)
+// À définir dans Vercel : Settings → Environment Variables
+//   VITE_SUPABASE_URL
+//   VITE_SUPABASE_ANON_KEY
+// ============================================================================
 
-export interface SupabaseClientWrapper { supabase: SupabaseClient; getCurrentUser(): Promise<User | null>; getUserProfile(userId: string): Promise<UserProfile | null>; signOut(): Promise<void>; redirectByRole(): Promise<void>; checkAuthAndRedirect(requireAuth?: boolean, requiredRole?: string | null): Promise<boolean>; isLoggedIn(): Promise<boolean>; }
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-// Augmentation de window pour la compatibilité avec l'existant declare global { interface Window { supabaseClient?: SupabaseClientWrapper; } }
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error(
+    '❌ supabaseClient introuvable : variables VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY manquantes.\n' +
+    'Vérifiez le dashboard Vercel → Settings → Environment Variables.'
+  );
+}
 
-// ============================================================================ // CONFIG — récupérée depuis les variables d'environnement (Vercel) // - Définir dans le dashboard Vercel : NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY // ============================================================================
+// ============================================================================
+// INSTANCE SINGLETON
+// ============================================================================
 
-const SUPABASE_URL: string = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''; const SUPABASE_ANON_KEY: string = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ============================================================================ // INITIALISATION (singleton — une seule instance côté client) // ============================================================================
+// ============================================================================
+// HELPERS
+// ============================================================================
 
-// IMPORTANT : Ne toucher au "window" que si on est bien côté navigateur. if (typeof window !== 'undefined') { if (!window.supabaseClient) { if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { console.warn( '⚠️ Supabase : variables d'environnement manquantes (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY). Vérifie le dashboard Vercel.' ); }
-
-const supabaseInstance: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// --------------------------------------------------------------------------
-// getCurrentUser
-// --------------------------------------------------------------------------
-async function getCurrentUser(): Promise<User | null> {
+export async function getCurrentUser(): Promise<User | null> {
   try {
-    const { data: { session }, error } = await supabaseInstance.auth.getSession();
+    const { data: { session }, error } = await supabase.auth.getSession();
     if (error) throw error;
-    return (session as Session | null)?.user ?? null;
+    return session?.user ?? null;
   } catch (err) {
-    console.error('Erreur lors de la récupération de la session:', (err as Error).message);
+    console.error('Erreur session:', err);
     return null;
   }
 }
 
-// --------------------------------------------------------------------------
-// getUserProfile
-// --------------------------------------------------------------------------
-async function getUserProfile(userId: string): Promise<UserProfile | null> {
-  if (!userId) {
-    console.error('getUserProfile a été appelé sans userId.');
-    return null;
-  }
-
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  if (!userId) return null;
   try {
-    const { data, error, status } = await supabaseInstance
+    const { data, error, status } = await supabase
       .from('users_profile')
       .select('user_id, prenom, nom, role')
       .eq('user_id', userId)
       .single();
-
     if (error && status !== 406) throw error;
-
     return data as UserProfile | null;
   } catch (err) {
-    console.error('Erreur lors de la récupération du profil:', (err as Error).message);
+    console.error('Erreur profil:', err);
     return null;
   }
 }
 
-// --------------------------------------------------------------------------
-// signOut
-// --------------------------------------------------------------------------
-async function signOut(): Promise<void> {
-  const { error } = await supabaseInstance.auth.signOut();
-  if (error) {
-    console.error('Erreur lors de la déconnexion:', error.message);
-  }
-  window.location.href = '/';
-}
-
-// --------------------------------------------------------------------------
-// redirectByRole
-// --------------------------------------------------------------------------
-async function redirectByRole(): Promise<void> {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    console.log('Redirection annulée : utilisateur non connecté.');
-    return;
-  }
-
-  const profile = await getUserProfile(user.id);
-
-  if (!profile) {
-    console.warn('Profil utilisateur introuvable. Redirection vers index.html par défaut.');
-    window.location.href = 'index.html';
-    return;
-  }
-
-  window.location.href = profile.role === 'admin' ? 'publier.html' : 'index.html';
-}
-
-// --------------------------------------------------------------------------
-// checkAuthAndRedirect
-// --------------------------------------------------------------------------
-async function checkAuthAndRedirect(
-  requireAuth = false,
-  requiredRole: string | null = null,
-): Promise<boolean> {
-  const user = await getCurrentUser();
-
-  if (requireAuth && !user) {
-    console.log('Authentification requise. Redirection vers connexion.html');
-    window.location.href = 'connexion.html';
-    return false;
-  }
-
-  if (user && requiredRole) {
-    const profile = await getUserProfile(user.id);
-
-    if (!profile) {
-      console.warn('Profil introuvable. Déconnexion et redirection.');
-      await signOut();
-      return false;
-    }
-
-    if (profile.role !== requiredRole) {
-      console.warn(`Rôle insuffisant. Requis : ${requiredRole}, Actuel : ${profile.role}`);
-      window.location.href = profile.role === 'admin' ? 'publier.html' : 'index.html';
-      return false;
-    }
-  }
-
-  return true;
-}
-
-// --------------------------------------------------------------------------
-// isLoggedIn
-// --------------------------------------------------------------------------
-async function isLoggedIn(): Promise<boolean> {
+export async function isLoggedIn(): Promise<boolean> {
   const user = await getCurrentUser();
   return user !== null;
 }
 
-// --------------------------------------------------------------------------
-// Exposition sur window
-// --------------------------------------------------------------------------
-window.supabaseClient = {
-  supabase: supabaseInstance,
-  getCurrentUser,
-  getUserProfile,
-  signOut,
-  redirectByRole,
-  checkAuthAndRedirect,
-  isLoggedIn,
-};
+// ============================================================================
+// EXPORT PAR DÉFAUT
+// ============================================================================
 
-console.log('✅ Supabase Client initialisé avec succès');
-
-} }
-
-// ============================================================================ // EXPORT (pour import ES module dans les autres fichiers .ts/.tsx) // Note : côté serveur (SSR) window n'existe pas — on retourne un cast pour garder // la compatibilité avec l'API existante côté client. // ============================================================================
-
-export default (typeof window !== 'undefined' && window.supabaseClient) ? (window.supabaseClient as SupabaseClientWrapper) : (null as unknown as SupabaseClientWrapper);
+export default supabase;
