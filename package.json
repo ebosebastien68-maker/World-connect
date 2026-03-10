@@ -5,8 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "node build.ts",
-    "vite-build": "vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint ./src --ext .ts,.tsx"
   },
@@ -28,7 +27,6 @@
     "eslint": "^8.50.0",
     "eslint-plugin-react": "^7.33.2",
     "@typescript-eslint/eslint-plugin": "^6.9.0",
-    "@typescript-eslint/parser": "^6.9.0",
-    "ts-node": "^10.9.1"
+    "@typescript-eslint/parser": "^6.9.0"
   }
 }
