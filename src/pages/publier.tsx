@@ -5,7 +5,7 @@
 // ✅ window.location.href → router.push()
 // ✅ window.supabaseClient supprimé
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import supabase from '@/lib/supabaseClient';
 
